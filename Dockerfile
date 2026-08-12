@@ -1,12 +1,12 @@
 FROM nikolaik/python-nodejs:python3.10-nodejs20
 
-# Install system dependencies & FFmpeg
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and install static FFmpeg
+# Download and install static FFmpeg (John Van Sickle build)
 RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
     -o ffmpeg.tar.xz && \
     tar -xJf ffmpeg.tar.xz && \
@@ -16,13 +16,9 @@ RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-stati
 
 WORKDIR /app
 
-# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-
-# Fix: Make sure 'ffmpeg' word is removed from your requirements.txt before running this
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
 COPY . /app/
 
 CMD ["bash", "start"]
