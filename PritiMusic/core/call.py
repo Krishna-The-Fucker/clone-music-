@@ -6,7 +6,7 @@ from typing import Union
 
 from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
-from pytgcalls import PyTgCalls, StreamType
+from pytgcalls import PyTgCalls
 from pytgcalls.exceptions import (
     AlreadyJoinedError,
     NoActiveGroupCall,
@@ -273,7 +273,6 @@ class Call(PyTgCalls):
         await assistant.join_group_call(
             config.LOGGER_ID,
             AudioVideoPiped(link),
-            stream_type=StreamType().pulse_stream,
         )
         await asyncio.sleep(0.2)
         await assistant.leave_group_call(config.LOGGER_ID)
@@ -353,7 +352,6 @@ class Call(PyTgCalls):
             await assistant_to_join.join_group_call(
                 chat_id,
                 stream,
-                stream_type=StreamType().pulse_stream,
             )
         except NoActiveGroupCall:
             raise AssistantErr(_["call_8"])
@@ -408,7 +406,6 @@ class Call(PyTgCalls):
             streamtype = check[0]["streamtype"]
             videoid = check[0]["vidid"]
             
-            # ✅ FIX: Identify Correct Client (Main vs Clone)
             chat_client = check[0].get("client")
             if not chat_client:
                 chat_client = app
@@ -447,8 +444,6 @@ class Call(PyTgCalls):
                         text=_["call_6"],
                     )
                 button = telegram_markup(_, chat_id)
-                
-                # ✅ Safe Random Image
                 img = get_random_img(config.STREAM_IMG_URL)
                 
                 run = await chat_client.send_photo(
@@ -461,7 +456,7 @@ class Call(PyTgCalls):
                         user,
                     ),
                     reply_markup=InlineKeyboardMarkup(button),
-                    has_spoiler=True # ✨ Spoiler
+                    has_spoiler=True
                 )
                 db[chat_id][0]["mystic"] = run
                 db[chat_id][0]["markup"] = "tg"
@@ -505,7 +500,6 @@ class Call(PyTgCalls):
                         text=_["call_6"],
                     )
                 img = await get_thumb(videoid)
-                # Fallback to random playlist image if thumb fails
                 if not img: img = get_random_img(config.PLAYLIST_IMG_URL)
 
                 button = stream_markup(_, chat_id)
@@ -520,7 +514,7 @@ class Call(PyTgCalls):
                         user,
                     ),
                     reply_markup=InlineKeyboardMarkup(button),
-                    has_spoiler=True # ✨ Spoiler
+                    has_spoiler=True
                 )
                 db[chat_id][0]["mystic"] = run
                 db[chat_id][0]["markup"] = "stream"
@@ -547,7 +541,7 @@ class Call(PyTgCalls):
                     photo=get_random_img(config.STREAM_IMG_URL),
                     caption=_["stream_2"].format(user),
                     reply_markup=InlineKeyboardMarkup(button),
-                    has_spoiler=True # ✨ Spoiler
+                    has_spoiler=True
                 )
                 db[chat_id][0]["mystic"] = run
                 db[chat_id][0]["markup"] = "tg"
@@ -572,7 +566,6 @@ class Call(PyTgCalls):
                     )
                 if videoid == "telegram":
                     button = telegram_markup(_, chat_id)
-                    
                     tg_img = get_random_img(config.TELEGRAM_AUDIO_URL) if str(streamtype) == "audio" else get_random_img(config.TELEGRAM_VIDEO_URL)
 
                     run = await chat_client.send_photo(
@@ -582,7 +575,7 @@ class Call(PyTgCalls):
                             config.SUPPORT_CHAT, title[:23], check[0]["dur"], user
                         ),
                         reply_markup=InlineKeyboardMarkup(button),
-                        has_spoiler=True # ✨ Spoiler
+                        has_spoiler=True
                     )
                     db[chat_id][0]["mystic"] = run
                     db[chat_id][0]["markup"] = "tg"
@@ -595,7 +588,7 @@ class Call(PyTgCalls):
                             config.SUPPORT_CHAT, title[:23], check[0]["dur"], user
                         ),
                         reply_markup=InlineKeyboardMarkup(button),
-                        has_spoiler=True # ✨ Spoiler
+                        has_spoiler=True
                     )
                     db[chat_id][0]["mystic"] = run
                     db[chat_id][0]["markup"] = "tg"
@@ -614,7 +607,7 @@ class Call(PyTgCalls):
                             user,
                         ),
                         reply_markup=InlineKeyboardMarkup(button),
-                        has_spoiler=True # ✨ Spoiler
+                        has_spoiler=True
                     )
                     db[chat_id][0]["mystic"] = run
                     db[chat_id][0]["markup"] = "stream"
