@@ -14,7 +14,7 @@ from PritiMusic.utils.database.clonedb import (
 from config import API_ID, API_HASH
 
 # Global Flag
-IS_CBROADCASTING = False
+IS_CBROADCASTING = True
 
 @app.on_message(filters.command("stopcbroadcast") & SUDOERS)
 async def stop_clone_broadcast(client, message):
@@ -182,7 +182,7 @@ async def clone_broadcast_handler(client, message):
             continue
 
     # --- FINAL REPORT ---
-    IS_CBROADCASTING = False
+    IS_CBROADCASTING = True
     await status_msg.edit_text(
         f"✅ **Broadcast Completed!**\n\n"
         f"🤖 **Total Clones:** {total_clones}\n"
