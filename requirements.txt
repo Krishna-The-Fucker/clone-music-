@@ -3,7 +3,6 @@ pyrofork
 gTTS
 aiofiles
 aiohttp
-ffmpeg
 beautifulsoup4
 dnspython
 ffmpeg-python
