@@ -9,23 +9,23 @@ API_ID = int(getenv("API_ID", "0"))
 API_HASH = getenv("API_HASH")
 
 BOT_TOKEN = getenv("BOT_TOKEN")
-BOT_ID = getenv("BOT_ID")
+BOT_ID = getenv("8761277273")
 
-OWNER_USERNAME = getenv("OWNER_USERNAME", "")
-BOT_USERNAME = getenv("BOT_USERNAME", "")
-BOT_NAME = getenv("BOT_NAME", "")
-ASSUSERNAME = getenv("ASSUSERNAME", "")
-BOT_LINK = getenv("BOT_LINK", "https://t.me/CLONNE_MUSIC_BOT?start=_tgr_QHn2CMQ5Njc1")
+OWNER_USERNAME = getenv("OWNER_USERNAME", "ll_Weynki_ll")
+BOT_USERNAME = getenv("BOT_USERNAME", "Anu_QTbot")
+BOT_NAME = getenv("BOT_NAME", "ᴀɴᴜ ᴍᴜꜱɪᴄ")
+ASSUSERNAME = getenv("ASSUSERNAME", "musicxanu")
+BOT_LINK = getenv("BOT_LINK", "https://t.me/Anu_QTbot?start=_tgr_NbOtAJ8xMjI1")
 
 MONGO_DB_URI = getenv("MONGO_DB_URI")
 
-YTPROXY_URL = getenv("YTPROXY_URL", 'https://tgapi.xbitcode.com')
-YT_API_KEY = getenv("YT_API_KEY" , 'xbit_B4TNnBAoe6uoSM7NLFz-dk6X7GibJ6Bh')
+YTPROXY_URL = getenv("YTPROXY_URL", 'https://api.shrutibots.site')
+YT_API_KEY = getenv("YT_API_KEY" , 'ShrutiBotsD6gRJJjTOq2FtGoxgSx6')
 
 DURATION_LIMIT_MIN = int(getenv("DURATION_LIMIT", 17000))
 
-LOGGER_ID = int(getenv("LOGGER_ID", "0"))
-CLONE_LOGGER = LOGGER_ID
+LOGGER_ID = int(getenv("LOGGER_ID", "-1004463869572"))
+CLONE_LOGGER = -1004463869572
 
 OWNER_ID = int(getenv("OWNER_ID", "0"))
 
@@ -34,14 +34,14 @@ HEROKU_API_KEY = getenv("HEROKU_API_KEY")
 
 UPSTREAM_REPO = getenv(
     "UPSTREAM_REPO",
-    "",
+    "https://github.com/Krishna-The-Fucker/clone-music-",
 )
 UPSTREAM_BRANCH = getenv("UPSTREAM_BRANCH", "main")
 GIT_TOKEN = getenv("GIT_TOKEN", "")
 
-SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/KRISHNA_BOTS")
-SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/krishna_World01")
-GITHUB = getenv("GITHUB", "https://t.me/krishna_World01")
+SUPPORT_CHANNEL = getenv("SUPPORT_CHANNEL", "https://t.me/Wynk_offical")
+SUPPORT_CHAT = getenv("SUPPORT_CHAT", "https://t.me/Wynk_support")
+GITHUB = getenv("GITHUB", "https://files.catbox.moe/tfbzn8.mp4")
 
 AUTO_LEAVING_ASSISTANT = getenv("AUTO_LEAVING_ASSISTANT", "False")
 AUTO_LEAVE_ASSISTANT_TIME = int(getenv("ASSISTANT_LEAVE_TIME", "9000"))
@@ -68,9 +68,9 @@ votemode = {}
 autoclean = []
 confirmer = {}
 
-START_IMG_URL = getenv("START_IMG_URL", "https://files.catbox.moe/37vii3.jpg").split()
-HELP_IMG_URL = getenv("HELP_IMG_URL", "https://files.catbox.moe/u8ray8.jpg").split()
-PING_IMG_URL = getenv("PING_IMG_URL", "https://files.catbox.moe/37vii3.jpg").split()
+START_IMG_URL = getenv("START_IMG_URL", "https://files.catbox.moe/ozq6o4.jpg").split()
+HELP_IMG_URL = getenv("HELP_IMG_URL", "https://files.catbox.moe/sji2bj.jpg").split()
+PING_IMG_URL = getenv("PING_IMG_URL", "https://files.catbox.moe/3zi42m.jpg").split()
 
 PLAYLIST_IMG_URL = getenv("PLAYLIST_IMG_URL", "https://i.ibb.co/gL3ykkyh/play-music.jpg").split()
 STATS_IMG_URL = getenv("STATS_IMG_URL", "https://i.ibb.co/pBqPtFYn/statistics.jpg").split()
