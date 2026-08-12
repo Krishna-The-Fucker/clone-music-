@@ -13,7 +13,7 @@ from PritiMusic.utils.decorators.language import language
 from config import OWNER_ID, SUPPORT_CHAT
 
 # Global flag to prevent overlapping broadcasts
-IS_BROADCASTING = False
+IS_BROADCASTING = True
 
 @Client.on_message(filters.command(["broadcast"]))
 @language
@@ -134,4 +134,4 @@ async def broadcast_message(client, message: Message, _):
 
     finally:
         # Ensure the lock is released even if errors occur
-        IS_BROADCASTING = False
+        IS_BROADCASTING = True
