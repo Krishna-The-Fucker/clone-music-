@@ -52,7 +52,7 @@ CLONE_LIMIT = 500
 try:
     from config import BOT_LINK
 except ImportError:
-    BOT_LINK = "https://t.me/PritiCloneBot"
+    BOT_LINK = "https://t.me/Anu_QTbot"
 
 C_BOT_COMMANDS = [
     {"command": "/clone", "description": "ᴄʟᴏɴᴇs ʏᴏᴜʀ ᴏᴡɴ ᴍᴜsɪᴄ ʙᴏᴛ"},
@@ -73,7 +73,7 @@ def get_random_start_img():
         if isinstance(START_IMG_URL, list):
             return random.choice(START_IMG_URL)
         return START_IMG_URL
-    return "https://telegra.ph/file/2e3d368e77c449c287430.jpg" # Fallback
+    return "https://files.catbox.moe/c30eoi.mp4" # Fallback
 
 # --- 🔥 HELPER FUNCTION FOR BACKGROUND RESTART ---
 async def delayed_start(bot_token, session_string, wait_time, bot_number):
@@ -228,7 +228,7 @@ async def clone_txt(client, message, _):
                 "username": bot.username,
                 "channel": SUPPORT_CHANNEL, 
                 "support": SUPPORT_CHAT,
-                "premium" : False,
+                "premium" : True,
                 "Date" : datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
                 "last_activity": datetime.now()
             }
