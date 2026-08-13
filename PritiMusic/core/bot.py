@@ -8,7 +8,8 @@ from ..logging import LOGGER
 
 class Lucky(Client):
     def __init__(self):
-        LOGGER(__name__).info(f"Starting Bot...")
+        LOGGER(__name__).info("Starting Bot...")
+
         super().__init__(
             name="PritiMusic",
             api_id=config.API_ID,
@@ -20,34 +21,102 @@ class Lucky(Client):
 
     async def start(self):
         await super().start()
+
+        # =====================================================
+        # BOT INFORMATION
+        # =====================================================
+
         self.id = self.me.id
-        self.name = self.me.first_name + " " + (self.me.last_name or "")
+        self.name = (
+            self.me.first_name
+            + (" " + self.me.last_name if self.me.last_name else "")
+        )
         self.username = self.me.username
         self.mention = self.me.mention
+
+        # =====================================================
+        # LOGGER GROUP
+        # =====================================================
 
         try:
             await self.send_message(
                 chat_id=config.LOGGER_ID,
-                text=f"<u><b>» {self.mention} ʙᴏᴛ sᴛᴀʀᴛᴇᴅ :</b><u>\n\nɪᴅ : <code>{self.id}</code>\nɴᴀᴍᴇ : {self.name}\nᴜsᴇʀɴᴀᴍᴇ : @{self.username}",
+                text=f"""
+<b>🟢 ʙᴏᴛ sᴛᴀʀᴛᴇᴅ</b>
+
+<b>🤖 ʙᴏᴛ :</b> {self.mention}
+
+<b>🆔 ɪᴅ :</b>
+<code>{self.id}</code>
+
+<b>👤 ɴᴀᴍᴇ :</b>
+{self.name}
+
+<b>🔗 ᴜsᴇʀɴᴀᴍᴇ :</b>
+@{self.username or "None"}
+""",
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
             )
-        except (errors.ChannelInvalid, errors.PeerIdInvalid):
+
+        except (
+            errors.ChannelInvalid,
+            errors.PeerIdInvalid,
+            errors.ChatIdInvalid,
+        ):
             LOGGER(__name__).error(
-                "Bot has failed to access the log group/channel. Make sure that you have added your bot to your log group/channel."
+                "❌ LOGGER_ID is invalid or bot cannot access "
+                "the logger group/channel."
             )
-            exit()
+
+        except errors.ChatAdminRequired:
+            LOGGER(__name__).error(
+                "❌ Bot needs admin permission in LOGGER_ID."
+            )
+
         except Exception as ex:
             LOGGER(__name__).error(
-                f"Bot has failed to access the log group/channel.\n  Reason : {type(ex).__name__}."
+                f"❌ Failed to send bot-start log: "
+                f"{type(ex).__name__}: {ex}"
             )
-            exit()
 
-        a = await self.get_chat_member(config.LOGGER_ID, self.id)
-        if a.status != ChatMemberStatus.ADMINISTRATOR:
-            LOGGER(__name__).error(
-                "Please Promote your bot as an admin in your log group/channel."
+        # =====================================================
+        # CHECK LOGGER ADMIN STATUS
+        # =====================================================
+
+        try:
+            member = await self.get_chat_member(
+                config.LOGGER_ID,
+                self.id,
             )
-            exit()
-        LOGGER(__name__).info(f"Music Bot Started as {self.name}")
+
+            if member.status != ChatMemberStatus.ADMINISTRATOR:
+                LOGGER(__name__).error(
+                    "❌ Bot is NOT ADMIN in LOGGER_ID. "
+                    "Please promote the bot as administrator."
+                )
+            else:
+                LOGGER(__name__).info(
+                    "✅ Bot is admin in LOGGER_ID."
+                )
+
+        except Exception as ex:
+            LOGGER(__name__).error(
+                f"❌ LOGGER permission check failed: "
+                f"{type(ex).__name__}: {ex}"
+            )
+
+        # =====================================================
+        # START SUCCESS
+        # =====================================================
+
+        LOGGER(__name__).info(
+            f"🎵 Music Bot Started as {self.name}"
+        )
 
     async def stop(self):
+        LOGGER(__name__).info(
+            f"Stopping Music Bot: {self.name}"
+        )
+
         await super().stop()
