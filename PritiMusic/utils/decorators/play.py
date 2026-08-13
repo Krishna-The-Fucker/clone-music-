@@ -27,7 +27,6 @@ from PritiMusic.utils.database import (
 )
 
 from PritiMusic.utils.inline import botplaylist_markup
-
 from PritiMusic.utils.logger import play_logs
 
 from config import (
@@ -39,6 +38,10 @@ from config import (
 from strings import get_string
 
 
+# =========================================================
+# ASSISTANT INVITE LINK CACHE
+# =========================================================
+
 links = {}
 clinks = {}
 
@@ -49,8 +52,8 @@ clinks = {}
 
 def get_image(value):
     """
-    Pyrogram ko single image URL return karta hai.
-    Agar config mein list ho to first URL lega.
+    Config me image URL list ho ya string,
+    Pyrogram ko single URL return karega.
     """
 
     if isinstance(value, list):
@@ -60,7 +63,7 @@ def get_image(value):
 
 
 # =========================================================
-# PLAY LOGGER HELPER
+# PLAY LOGGER
 # =========================================================
 
 async def send_play_logger(
@@ -70,24 +73,31 @@ async def send_play_logger(
     video_telegram=None,
 ):
     """
-    Play request ko logger group mein bhejta hai.
+    Play request ko LOGGER_ID par bhejta hai.
 
-    Logger fail hone par playback nahi rukega.
+    Logger me error aaye to playback nahi rukega.
     """
 
     try:
+        # -------------------------------------------------
+        # SOURCE DETECT
+        # -------------------------------------------------
 
         if url:
-            streamtype = "youtube"
+            streamtype = "YouTube"
 
         elif audio_telegram:
-            streamtype = "telegram_audio"
+            streamtype = "Telegram Audio"
 
         elif video_telegram:
-            streamtype = "telegram_video"
+            streamtype = "Telegram Video"
 
         else:
-            streamtype = "search"
+            streamtype = "Search"
+
+        # -------------------------------------------------
+        # LOGGER
+        # -------------------------------------------------
 
         await play_logs(
             message,
@@ -95,7 +105,6 @@ async def send_play_logger(
         )
 
     except Exception as e:
-
         print(
             f"[PLAY LOGGER ERROR] "
             f"{type(e).__name__}: {e}"
@@ -121,12 +130,12 @@ def PlayWrapper(command):
         _ = get_string(language)
 
         # =================================================
-        # SENDER CHAT CHECK
+        # SENDER CHAT
         # =================================================
 
         if message.sender_chat:
 
-            upl = InlineKeyboardMarkup(
+            keyboard = InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
@@ -139,7 +148,7 @@ def PlayWrapper(command):
 
             return await message.reply_text(
                 _["general_3"],
-                reply_markup=upl,
+                reply_markup=keyboard,
             )
 
         # =================================================
@@ -212,7 +221,6 @@ def PlayWrapper(command):
             if len(message.command) < 2:
 
                 if "stream" in message.command:
-
                     return await message.reply_text(
                         _["str_1"]
                     )
@@ -242,13 +250,13 @@ def PlayWrapper(command):
 
         # =================================================
         # PLAY LOGGER
+        # =================================================
+        #
+        # Logger ko actual command se pehle call kiya gaya.
         #
         # IMPORTANT:
-        # Logger ko actual play function se pehle call
-        # kiya ja raha hai.
-        #
         # Logger fail hone par playback continue karega.
-        # =================================================
+        #
 
         await send_play_logger(
             message=message,
@@ -261,7 +269,13 @@ def PlayWrapper(command):
         # CHAT MODE
         # =================================================
 
-        if message.command[0][0] == "c":
+        command_name = (
+            message.command[0]
+            if message.command
+            else ""
+        )
+
+        if command_name.startswith("c"):
 
             chat_id = await get_cmode(
                 message.chat.id
@@ -293,7 +307,7 @@ def PlayWrapper(command):
             channel = None
 
         # =================================================
-        # PLAY SETTINGS
+        # PLAY MODE
         # =================================================
 
         playmode = await get_playmode(
@@ -305,7 +319,7 @@ def PlayWrapper(command):
         )
 
         # =================================================
-        # ADMIN CHECK
+        # PLAY PERMISSION
         # =================================================
 
         if playty != "Everyone":
@@ -332,18 +346,12 @@ def PlayWrapper(command):
                     )
 
         # =================================================
-        # VIDEO FLAG
+        # VIDEO MODE
         # =================================================
 
         command_text = message.text or ""
 
-        first_command = (
-            message.command[0]
-            if message.command
-            else ""
-        )
-
-        if first_command.startswith("v"):
+        if command_name.startswith("v"):
 
             video = True
 
@@ -366,13 +374,7 @@ def PlayWrapper(command):
         # FORCE PLAY
         # =================================================
 
-        last_command = (
-            message.command[0]
-            if message.command
-            else ""
-        )
-
-        if last_command.endswith("e"):
+        if command_name.endswith("e"):
 
             if not await is_active_chat(
                 chat_id
@@ -389,7 +391,7 @@ def PlayWrapper(command):
             fplay = None
 
         # =================================================
-        # ASSISTANT JOIN
+        # ASSISTANT
         # =================================================
 
         if not await is_active_chat(
@@ -407,14 +409,14 @@ def PlayWrapper(command):
                 )
 
             # =================================================
-            # CHECK ASSISTANT MEMBER
+            # ASSISTANT MEMBER CHECK
             # =================================================
 
             try:
 
                 try:
 
-                    get = await app.get_chat_member(
+                    member = await app.get_chat_member(
                         chat_id,
                         userbot.id,
                     )
@@ -429,7 +431,7 @@ def PlayWrapper(command):
                 # BANNED / RESTRICTED
                 # =================================================
 
-                if get.status in (
+                if member.status in (
                     ChatMemberStatus.BANNED,
                     ChatMemberStatus.RESTRICTED,
                 ):
@@ -476,6 +478,10 @@ def PlayWrapper(command):
 
                 else:
 
+                    # -----------------------------------------
+                    # PUBLIC GROUP
+                    # -----------------------------------------
+
                     if message.chat.username:
 
                         invitelink = (
@@ -489,8 +495,11 @@ def PlayWrapper(command):
                             )
 
                         except Exception:
-
                             pass
+
+                    # -----------------------------------------
+                    # PRIVATE GROUP
+                    # -----------------------------------------
 
                     else:
 
@@ -518,18 +527,16 @@ def PlayWrapper(command):
                             )
 
                 # =============================================
-                # NORMALIZE INVITE LINK
+                # NORMALIZE TELEGRAM LINK
                 # =============================================
 
                 if invitelink.startswith(
                     "https://t.me/+"
                 ):
 
-                    invitelink = (
-                        invitelink.replace(
-                            "https://t.me/+",
-                            "https://t.me/joinchat/",
-                        )
+                    invitelink = invitelink.replace(
+                        "https://t.me/+",
+                        "https://t.me/joinchat/",
                     )
 
                 # =============================================
@@ -583,7 +590,6 @@ def PlayWrapper(command):
                         )
 
                     except Exception:
-
                         pass
 
                 # =============================================
@@ -591,7 +597,6 @@ def PlayWrapper(command):
                 # =============================================
 
                 except UserAlreadyParticipant:
-
                     pass
 
                 # =============================================
@@ -608,7 +613,7 @@ def PlayWrapper(command):
                     )
 
                 # =============================================
-                # SAVE LINK
+                # SAVE INVITE LINK
                 # =============================================
 
                 links[
@@ -626,11 +631,10 @@ def PlayWrapper(command):
                     )
 
                 except Exception:
-
                     pass
 
         # =================================================
-        # CALL ACTUAL PLAY FUNCTION
+        # ACTUAL PLAY FUNCTION
         # =================================================
 
         return await command(
