@@ -294,7 +294,7 @@ def PlayWrapper(command):
                 try:  
                     member = await app.get_chat_member(  
                         chat_id,  
-                        userbot.id,  
+                        userbot.me.id,  
                     )  
                 except ChatAdminRequired:  
                     return await message.reply_text(_["call_1"])  
@@ -309,9 +309,9 @@ def PlayWrapper(command):
                     return await message.reply_text(  
                         _["call_2"].format(  
                             app.mention,  
-                            userbot.id,  
-                            userbot.name,  
-                            userbot.username,  
+                            userbot.me.id,  
+                            userbot.me.first_name,  
+                            userbot.me.username,  
                         ),  
                         reply_markup=InlineKeyboardMarkup(  
                             [  
@@ -368,7 +368,7 @@ def PlayWrapper(command):
                     try:  
                         await app.approve_chat_join_request(  
                             chat_id,  
-                            userbot.id,  
+                            userbot.me.id,  
                         )  
                     except Exception as e:  
                         return await message.reply_text(  
