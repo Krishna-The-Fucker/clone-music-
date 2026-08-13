@@ -75,7 +75,7 @@ CLONE_LOGGER_ID = int(
 )
 
 # Backward compatibility
-CLONE_LOGGER = -1004463869572
+CLONE_LOGGER = CLONE_LOGGER_ID
 
 
 # =========================================================
