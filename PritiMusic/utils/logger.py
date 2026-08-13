@@ -1,7 +1,24 @@
+import html
+import time
+
 from pyrogram.enums import ParseMode
 
 from PritiMusic import app
 from config import LOGGER_ID, CLONE_LOGGER_ID
+
+
+# =========================================================
+# DUPLICATE PROTECTION
+# =========================================================
+
+# Same play event agar accidentally 2 baar call ho,
+# to 8 seconds ke andar second message nahi bhejega.
+_PLAY_LOG_CACHE = {}
+
+# Same bot start event ko duplicate hone se rokega.
+_START_LOG_CACHE = {}
+
+DUPLICATE_WINDOW = 8
 
 
 # =========================================================
@@ -15,31 +32,87 @@ def safe_int(value):
         return None
 
 
+def esc(value):
+    """
+    Telegram HTML ke liye safe text.
+    """
+    try:
+        return html.escape(str(value))
+    except Exception:
+        return "Unknown"
+
+
+def is_duplicate(cache, key):
+    """
+    Check karta hai ki same event recently send hua hai ya nahi.
+    """
+
+    now = time.monotonic()
+
+    old_time = cache.get(key)
+
+    if old_time is not None:
+
+        if now - old_time < DUPLICATE_WINDOW:
+            return True
+
+    cache[key] = now
+
+    # Cache ko unnecessarily bada hone se rokna
+    if len(cache) > 500:
+
+        expired = [
+            k
+            for k, v in cache.items()
+            if now - v > DUPLICATE_WINDOW
+        ]
+
+        for k in expired:
+            cache.pop(k, None)
+
+    return False
+
+
 def get_user_text(user):
+
     if not user:
         return "Unknown"
 
     try:
         name = user.mention
     except Exception:
-        name = getattr(user, "first_name", None) or "Unknown"
+        name = getattr(
+            user,
+            "first_name",
+            None,
+        ) or "Unknown"
 
-    username = (
-        f"@{user.username}"
-        if getattr(user, "username", None)
-        else "No Username"
+    username = getattr(
+        user,
+        "username",
+        None,
     )
 
-    user_id = getattr(user, "id", "Unknown")
+    if username:
+        username_text = f"@{esc(username)}"
+    else:
+        username_text = "No Username"
+
+    user_id = getattr(
+        user,
+        "id",
+        "Unknown",
+    )
 
     return (
         f"{name}\n"
-        f"<b>Username:</b> {username}\n"
+        f"<b>Username:</b> {username_text}\n"
         f"<b>ID:</b> <code>{user_id}</code>"
     )
 
 
 def get_chat_text(chat):
+
     if not chat:
         return "Unknown"
 
@@ -49,39 +122,76 @@ def get_chat_text(chat):
         or "Unknown"
     )
 
-    chat_id = getattr(chat, "id", "Unknown")
+    chat_id = getattr(
+        chat,
+        "id",
+        "Unknown",
+    )
 
-    username = getattr(chat, "username", None)
+    username = getattr(
+        chat,
+        "username",
+        None,
+    )
 
     if username:
-        link = f"https://t.me/{username}"
+
+        link = (
+            f"https://t.me/{esc(username)}"
+        )
+
     else:
+
         link = "Private Group"
 
     return (
-        f"<b>{title}</b>\n"
+        f"<b>{esc(title)}</b>\n"
         f"<b>ID:</b> <code>{chat_id}</code>\n"
         f"<b>Link:</b> {link}"
     )
 
 
 async def get_query(message):
+
     try:
-        text = getattr(message, "text", None)
+
+        text = getattr(
+            message,
+            "text",
+            None,
+        )
 
         if text:
-            parts = text.split(None, 1)
+
+            parts = text.split(
+                None,
+                1,
+            )
 
             if len(parts) > 1:
-                return parts[1][:1000]
 
-        caption = getattr(message, "caption", None)
+                return esc(
+                    parts[1][:1000]
+                )
+
+        caption = getattr(
+            message,
+            "caption",
+            None,
+        )
 
         if caption:
-            parts = caption.split(None, 1)
+
+            parts = caption.split(
+                None,
+                1,
+            )
 
             if len(parts) > 1:
-                return parts[1][:1000]
+
+                return esc(
+                    parts[1][:1000]
+                )
 
     except Exception:
         pass
@@ -89,37 +199,72 @@ async def get_query(message):
     return "Link / File / Reply"
 
 
-def get_source(message, streamtype=None):
+def get_source(
+    message,
+    streamtype=None,
+):
+
     if streamtype:
-        return str(streamtype)
+        return esc(streamtype)
 
     try:
-        if message.reply_to_message:
 
-            if message.reply_to_message.audio:
+        reply = getattr(
+            message,
+            "reply_to_message",
+            None,
+        )
+
+        if reply:
+
+            if getattr(
+                reply,
+                "audio",
+                None,
+            ):
                 return "Telegram Audio"
 
-            if message.reply_to_message.voice:
+            if getattr(
+                reply,
+                "voice",
+                None,
+            ):
                 return "Telegram Voice"
 
-            if message.reply_to_message.video:
+            if getattr(
+                reply,
+                "video",
+                None,
+            ):
                 return "Telegram Video"
 
-            if message.reply_to_message.document:
+            if getattr(
+                reply,
+                "document",
+                None,
+            ):
                 return "Telegram Document"
 
         text = (
-            getattr(message, "text", None)
-            or getattr(message, "caption", None)
+            getattr(
+                message,
+                "text",
+                None,
+            )
+            or getattr(
+                message,
+                "caption",
+                None,
+            )
             or ""
         )
 
         text_lower = text.lower()
 
-        if "youtube.com" in text_lower:
-            return "YouTube"
-
-        if "youtu.be" in text_lower:
+        if (
+            "youtube.com" in text_lower
+            or "youtu.be" in text_lower
+        ):
             return "YouTube"
 
         if "spotify.com" in text_lower:
@@ -132,44 +277,154 @@ def get_source(message, streamtype=None):
 
 
 # =========================================================
+# PLAY DUPLICATE KEY
+# =========================================================
+
+async def get_play_key(
+    message,
+    bot_id,
+):
+
+    try:
+
+        chat = getattr(
+            message,
+            "chat",
+            None,
+        )
+
+        user = getattr(
+            message,
+            "from_user",
+            None,
+        )
+
+        query = await get_query(
+            message
+        )
+
+        chat_id = getattr(
+            chat,
+            "id",
+            0,
+        )
+
+        user_id = getattr(
+            user,
+            "id",
+            0,
+        )
+
+        return (
+            bot_id,
+            chat_id,
+            user_id,
+            query,
+        )
+
+    except Exception:
+
+        return (
+            bot_id,
+            0,
+            0,
+            "unknown",
+        )
+
+
+# =========================================================
 # MAIN BOT PLAY LOGGER
 # =========================================================
 
-async def play_logs(message, streamtype="Unknown"):
+async def play_logs(
+    message,
+    streamtype="Unknown",
+):
+
     """
-    Main bot ke play logs LOGGER_ID me bhejta hai.
+    Main bot ka play log.
+
+    IMPORTANT:
+    Sirf LOGGER_ID me ek message bhejta hai.
     """
 
     try:
 
-        logger_id = safe_int(LOGGER_ID)
+        logger_id = safe_int(
+            LOGGER_ID
+        )
 
         if not logger_id:
-            print("[LOGGER] LOGGER_ID is not configured.")
+
+            print(
+                "[LOGGER] LOGGER_ID is not configured."
+            )
+
             return False
 
         if not message:
             return False
 
-        if message.chat and message.chat.id == logger_id:
+        chat = getattr(
+            message,
+            "chat",
+            None,
+        )
+
+        if chat and chat.id == logger_id:
+
             return False
 
         bot = await app.get_me()
 
-        query = await get_query(message)
+        # =================================================
+        # DUPLICATE CHECK
+        # =================================================
+
+        play_key = await get_play_key(
+            message,
+            bot.id,
+        )
+
+        if is_duplicate(
+            _PLAY_LOG_CACHE,
+            play_key,
+        ):
+
+            print(
+                "[LOGGER] Duplicate play log skipped."
+            )
+
+            return False
+
+        # =================================================
+        # DATA
+        # =================================================
+
+        query = await get_query(
+            message
+        )
 
         user_text = get_user_text(
-            getattr(message, "from_user", None)
+            getattr(
+                message,
+                "from_user",
+                None,
+            )
         )
 
         chat_text = get_chat_text(
-            getattr(message, "chat", None)
+            chat
         )
 
         source = get_source(
             message,
-            streamtype
+            streamtype,
         )
+
+        # =================================================
+        # MESSAGE
+        # =================================================
 
         logger_text = f"""
 <b>🎵 {bot.mention} ᴘʟᴀʏ ʟᴏɢ</b>
@@ -195,6 +450,10 @@ async def play_logs(message, streamtype="Unknown"):
 ━━━━━━━━━━━━━━━━━━━━
 """
 
+        # =================================================
+        # SEND
+        # =================================================
+
         await app.send_message(
             chat_id=logger_id,
             text=logger_text,
@@ -203,8 +462,7 @@ async def play_logs(message, streamtype="Unknown"):
         )
 
         print(
-            f"[LOGGER] Main play log sent | "
-            f"chat={message.chat.id}"
+            "[LOGGER] Main play log sent."
         )
 
         return True
@@ -212,7 +470,7 @@ async def play_logs(message, streamtype="Unknown"):
     except Exception as e:
 
         print(
-            f"[LOGGER ERROR] play_logs: "
+            "[LOGGER ERROR] play_logs: "
             f"{type(e).__name__}: {e}"
         )
 
@@ -230,11 +488,19 @@ async def clone_bot_logs(
     clone_logger_id=None,
     streamtype="Unknown",
 ):
-    """
-    Clone bot ka play log:
 
-    1. Clone logger
-    2. Main logger
+    """
+    Clone bot ka play log.
+
+    IMPORTANT:
+    Agar LOGGER_ID aur CLONE_LOGGER_ID same hain,
+    to sirf EK message jayega.
+
+    Agar IDs alag hain:
+        1. Clone logger
+        2. Main logger
+
+    dono me message ja sakta hai.
     """
 
     try:
@@ -242,35 +508,142 @@ async def clone_bot_logs(
         bot = await client.get_me()
 
         if not bot_mention:
+
             bot_mention = bot.mention
 
-        query = await get_query(message)
+        # =================================================
+        # DUPLICATE CHECK
+        # =================================================
+
+        play_key = await get_play_key(
+            message,
+            bot.id,
+        )
+
+        clone_key = (
+            "clone",
+            play_key,
+        )
+
+        if is_duplicate(
+            _PLAY_LOG_CACHE,
+            clone_key,
+        ):
+
+            print(
+                "[LOGGER] Duplicate clone play log skipped."
+            )
+
+            return False
+
+        # =================================================
+        # DATA
+        # =================================================
+
+        query = await get_query(
+            message
+        )
 
         user_text = get_user_text(
-            getattr(message, "from_user", None)
+            getattr(
+                message,
+                "from_user",
+                None,
+            )
         )
 
         chat_text = get_chat_text(
-            getattr(message, "chat", None)
+            getattr(
+                message,
+                "chat",
+                None,
+            )
         )
 
         source = get_source(
             message,
-            streamtype
+            streamtype,
         )
 
         # =================================================
-        # CLONE LOGGER
+        # LOGGER IDS
         # =================================================
 
-        target_clone_logger = (
+        target_clone_logger = safe_int(
             clone_logger_id
             or CLONE_LOGGER_ID
         )
 
-        target_clone_logger = safe_int(
-            target_clone_logger
+        main_logger = safe_int(
+            LOGGER_ID
         )
+
+        # =================================================
+        # CASE 1
+        # SAME LOGGER ID
+        # =================================================
+
+        if (
+            target_clone_logger
+            and main_logger
+            and target_clone_logger == main_logger
+        ):
+
+            text = f"""
+<b>🎵 ᴄʟᴏɴᴇ ʙᴏᴛ ᴘʟᴀʏ ʟᴏɢ</b>
+
+━━━━━━━━━━━━━━━━━━━━
+
+<b>🤖 ʙᴏᴛ:</b>
+{bot_mention}
+
+<b>🆔 ɪᴅ:</b>
+<code>{bot.id}</code>
+
+<b>👤 ᴘʟᴀʏᴇᴅ ʙʏ:</b>
+{user_text}
+
+<b>🎶 ǫᴜᴇʀʏ:</b>
+<code>{query}</code>
+
+<b>📡 sᴏᴜʀᴄᴇ:</b>
+<code>{source}</code>
+
+<b>👥 ᴄʜᴀᴛ:</b>
+{chat_text}
+
+━━━━━━━━━━━━━━━━━━━━
+"""
+
+            try:
+
+                await client.send_message(
+                    chat_id=target_clone_logger,
+                    text=text,
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+
+                print(
+                    "[LOGGER] Clone play log sent once "
+                    "(same logger ID)."
+                )
+
+                return True
+
+            except Exception as e:
+
+                print(
+                    "[LOGGER ERROR] Clone logger: "
+                    f"{type(e).__name__}: {e}"
+                )
+
+                return False
+
+        # =================================================
+        # CASE 2
+        # CLONE LOGGER ONLY
+        # =================================================
 
         if target_clone_logger:
 
@@ -310,7 +683,7 @@ async def clone_bot_logs(
                 )
 
                 print(
-                    "[LOGGER] Clone play log sent."
+                    "[LOGGER] Clone logger sent."
                 )
 
             except Exception as e:
@@ -322,9 +695,8 @@ async def clone_bot_logs(
 
         # =================================================
         # MAIN LOGGER
+        # ONLY IF IDS ARE DIFFERENT
         # =================================================
-
-        main_logger = safe_int(LOGGER_ID)
 
         if main_logger:
 
@@ -364,7 +736,7 @@ async def clone_bot_logs(
                 )
 
                 print(
-                    "[LOGGER] Main clone play log sent."
+                    "[LOGGER] Main clone logger sent."
                 )
 
             except Exception as e:
@@ -390,24 +762,53 @@ async def clone_bot_logs(
 # MAIN BOT START LOGGER
 # =========================================================
 
-async def bot_start_logs(client=None):
+async def bot_start_logs(
+    client=None,
+):
+
     """
-    Main bot start hone par LOGGER_ID me message.
+    Main bot start hone par LOGGER_ID me
+    sirf ek message.
     """
 
     try:
 
         bot_client = client or app
 
-        logger_id = safe_int(LOGGER_ID)
+        logger_id = safe_int(
+            LOGGER_ID
+        )
 
         if not logger_id:
+
             print(
                 "[LOGGER] LOGGER_ID is not configured."
             )
+
             return False
 
         bot = await bot_client.get_me()
+
+        # =================================================
+        # DUPLICATE START CHECK
+        # =================================================
+
+        start_key = (
+            "main_start",
+            bot.id,
+            logger_id,
+        )
+
+        if is_duplicate(
+            _START_LOG_CACHE,
+            start_key,
+        ):
+
+            print(
+                "[LOGGER] Duplicate bot-start log skipped."
+            )
+
+            return False
 
         text = f"""
 <b>🚀 ʙᴏᴛ sᴛᴀʀᴛᴇᴅ</b>
@@ -421,7 +822,7 @@ async def bot_start_logs(client=None):
 <code>{bot.id}</code>
 
 <b>👤 ᴜsᴇʀɴᴀᴍᴇ:</b>
-@{bot.username or "None"}
+@{esc(bot.username or "None")}
 
 <b>📌 sᴛᴀᴛᴜs:</b>
 <code>ONLINE</code>
@@ -458,18 +859,52 @@ async def bot_start_logs(client=None):
 # =========================================================
 
 async def clone_start_logs(client):
+
     """
     Clone bot start hone par:
 
     - CLONE_LOGGER_ID
+
+    Aur agar LOGGER_ID alag hai:
     - LOGGER_ID
 
-    dono jagah message bhejta hai.
+    SAME ID hone par sirf EK message.
     """
 
     try:
 
         bot = await client.get_me()
+
+        clone_logger = safe_int(
+            CLONE_LOGGER_ID
+        )
+
+        main_logger = safe_int(
+            LOGGER_ID
+        )
+
+        # =================================================
+        # DUPLICATE START CHECK
+        # =================================================
+
+        start_key = (
+            "clone_start",
+            bot.id,
+            clone_logger,
+            main_logger,
+        )
+
+        if is_duplicate(
+            _START_LOG_CACHE,
+            start_key,
+        ):
+
+            print(
+                "[LOGGER] Duplicate clone-start "
+                "log skipped."
+            )
+
+            return False
 
         text = f"""
 <b>🟢 ᴄʟᴏɴᴇ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ</b>
@@ -483,7 +918,7 @@ async def clone_start_logs(client):
 <code>{bot.id}</code>
 
 <b>👤 ᴜsᴇʀɴᴀᴍᴇ:</b>
-@{bot.username or "None"}
+@{esc(bot.username or "None")}
 
 <b>📌 sᴛᴀᴛᴜs:</b>
 <code>ONLINE</code>
@@ -491,13 +926,40 @@ async def clone_start_logs(client):
 ━━━━━━━━━━━━━━━━━━━━
 """
 
-        clone_logger = safe_int(
-            CLONE_LOGGER_ID
-        )
+        # =================================================
+        # SAME ID
+        # =================================================
 
-        main_logger = safe_int(
-            LOGGER_ID
-        )
+        if (
+            clone_logger
+            and main_logger
+            and clone_logger == main_logger
+        ):
+
+            try:
+
+                await client.send_message(
+                    chat_id=clone_logger,
+                    text=text,
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+
+                print(
+                    "[LOGGER] Clone start log sent once "
+                    "(same logger ID)."
+                )
+
+                return True
+
+            except Exception as e:
+
+                print(
+                    "[LOGGER ERROR] Clone start: "
+                    f"{type(e).__name__}: {e}"
+                )
+
+                return False
 
         # =================================================
         # CLONE LOGGER
@@ -521,8 +983,8 @@ async def clone_start_logs(client):
             except Exception as e:
 
                 print(
-                    "[LOGGER ERROR] "
-                    f"Clone start: {type(e).__name__}: {e}"
+                    "[LOGGER ERROR] Clone start: "
+                    f"{type(e).__name__}: {e}"
                 )
 
         # =================================================
@@ -547,8 +1009,8 @@ async def clone_start_logs(client):
             except Exception as e:
 
                 print(
-                    "[LOGGER ERROR] "
-                    f"Main clone start: {type(e).__name__}: {e}"
+                    "[LOGGER ERROR] Main clone start: "
+                    f"{type(e).__name__}: {e}"
                 )
 
         return True
