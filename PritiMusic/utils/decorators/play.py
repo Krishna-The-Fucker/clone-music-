@@ -56,6 +56,7 @@ clinks = {}
 def get_image(value):
     """
     Config me image URL string ya list/tuple ho sakti hai.
+    Pyrogram ko single image URL return karta hai.
     """
 
     if isinstance(value, (list, tuple)):
@@ -69,6 +70,10 @@ def get_image(value):
 # =========================================================
 
 def get_command_name(message):
+    """
+    Safe command name.
+    """
+
     try:
         command = getattr(message, "command", None)
 
@@ -87,16 +92,17 @@ def get_command_name(message):
 
 async def get_assistant_info(userbot):
     """
-    get_assistant() se Client milta hai.
+    get_assistant() se Pyrogram Client milta hai.
 
-    Client ke andar directly:
+    Client object par:
         userbot.id
         userbot.name
         userbot.username
 
     use nahi karna.
 
-    get_me() se actual Telegram User object milta hai.
+    Actual Telegram User object:
+        await userbot.get_me()
     """
 
     try:
@@ -119,19 +125,50 @@ async def get_assistant_info(userbot):
 
 
 # =========================================================
-# ASSISTANT MEMBER CHECK
+# GET BOT USER
 # =========================================================
 
-async def get_assistant_member(chat_id, assistant_id):
+async def get_bot_user(client):
     """
-    Assistant ka current membership status safely check karta hai.
+    Current main/clone bot ka Telegram User object.
+    """
+
+    try:
+        return await client.get_me()
+
+    except Exception as e:
+
+        print(
+            "[BOT INFO ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+        return None
+
+
+# =========================================================
+# CHECK BOT MEMBERSHIP
+# =========================================================
+
+async def check_bot_member(
+    bot_client,
+    chat_id,
+    user_id,
+):
+    """
+    Kisi specific bot/client se assistant membership
+    check karta hai.
+
+    Returns:
+        member object
+        None = member nahi mila / permission issue
     """
 
     try:
 
-        return await app.get_chat_member(
+        return await bot_client.get_chat_member(
             chat_id,
-            assistant_id,
+            user_id,
         )
 
     except UserNotParticipant:
@@ -141,8 +178,8 @@ async def get_assistant_member(chat_id, assistant_id):
     except ChatAdminRequired:
 
         print(
-            "[ASSISTANT CHECK] "
-            "Bot ko chat members check karne ki permission nahi hai."
+            "[BOT MEMBER CHECK] "
+            "ChatAdminRequired"
         )
 
         return None
@@ -150,11 +187,649 @@ async def get_assistant_member(chat_id, assistant_id):
     except Exception as e:
 
         print(
-            "[ASSISTANT MEMBER ERROR] "
+            "[BOT MEMBER CHECK ERROR] "
             f"{type(e).__name__}: {e}"
         )
 
         return None
+
+
+# =========================================================
+# EXPORT INVITE LINK
+# =========================================================
+
+async def get_invite_link(
+    client,
+    message,
+    chat_id,
+):
+    """
+    Pehle current bot/clone se invite link banane ki
+    koshish karega.
+
+    Agar clone ke paas permission nahi hai to main app
+    se fallback try karega.
+
+    Isse clone bots bhi playback continue kar sakte hain
+    jab main bot ke paas required permission ho.
+    """
+
+    # =====================================================
+    # CACHE
+    # =====================================================
+
+    cached = links.get(chat_id)
+
+    if cached:
+        return cached, client
+
+    # =====================================================
+    # PUBLIC GROUP
+    # =====================================================
+
+    try:
+
+        username = getattr(
+            message.chat,
+            "username",
+            None,
+        )
+
+        if username:
+
+            return username, client
+
+    except Exception:
+
+        pass
+
+    # =====================================================
+    # TRY CURRENT BOT FIRST
+    # =====================================================
+
+    try:
+
+        invite = await client.export_chat_invite_link(
+            chat_id
+        )
+
+        if invite:
+
+            links[chat_id] = invite
+
+            return invite, client
+
+    except Exception as e:
+
+        print(
+            "[INVITE CURRENT BOT ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+    # =====================================================
+    # FALLBACK MAIN BOT
+    # =====================================================
+
+    if client is not app:
+
+        try:
+
+            invite = await app.export_chat_invite_link(
+                chat_id
+            )
+
+            if invite:
+
+                links[chat_id] = invite
+
+                return invite, app
+
+        except Exception as e:
+
+            print(
+                "[INVITE MAIN BOT ERROR] "
+                f"{type(e).__name__}: {e}"
+            )
+
+    # =====================================================
+    # FAILED
+    # =====================================================
+
+    return None, None
+
+
+# =========================================================
+# APPROVE JOIN REQUEST
+# =========================================================
+
+async def approve_assistant_request(
+    client,
+    chat_id,
+    assistant_id,
+):
+    """
+    Current clone/main bot se request approve karega.
+    Fail hone par main bot fallback.
+    """
+
+    # =====================================================
+    # CURRENT BOT
+    # =====================================================
+
+    try:
+
+        await client.approve_chat_join_request(
+            chat_id,
+            assistant_id,
+        )
+
+        return True
+
+    except Exception as e:
+
+        print(
+            "[APPROVE CURRENT BOT ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+    # =====================================================
+    # MAIN BOT FALLBACK
+    # =====================================================
+
+    if client is not app:
+
+        try:
+
+            await app.approve_chat_join_request(
+                chat_id,
+                assistant_id,
+            )
+
+            return True
+
+        except Exception as e:
+
+            print(
+                "[APPROVE MAIN BOT ERROR] "
+                f"{type(e).__name__}: {e}"
+            )
+
+    return False
+
+
+# =========================================================
+# ASSISTANT JOIN
+# =========================================================
+
+async def ensure_assistant_joined(
+    client,
+    message,
+    chat_id,
+    userbot,
+    assistant,
+    _,
+):
+    """
+    Assistant ko group me ensure karta hai.
+
+    IMPORTANT:
+        client = current main/clone bot
+        userbot = assistant Pyrogram Client
+        assistant = assistant Telegram User
+
+    Return:
+        True  = assistant ready
+        False = assistant ready nahi
+    """
+
+    # =====================================================
+    # ASSISTANT INFO
+    # =====================================================
+
+    assistant_id = assistant.id
+
+    assistant_name = (
+        assistant.first_name
+        or "Assistant"
+    )
+
+    assistant_username = (
+        f"@{assistant.username}"
+        if assistant.username
+        else "No Username"
+    )
+
+    # =====================================================
+    # CURRENT MEMBERSHIP CHECK
+    # =====================================================
+
+    member = None
+
+    try:
+
+        member = await client.get_chat_member(
+            chat_id,
+            assistant_id,
+        )
+
+    except UserNotParticipant:
+
+        member = None
+
+    except ChatAdminRequired:
+
+        print(
+            "[ASSISTANT CHECK] "
+            "Current bot cannot check members."
+        )
+
+        # Main bot fallback
+
+        if client is not app:
+
+            try:
+
+                member = await app.get_chat_member(
+                    chat_id,
+                    assistant_id,
+                )
+
+            except UserNotParticipant:
+
+                member = None
+
+            except Exception as e:
+
+                print(
+                    "[ASSISTANT MAIN CHECK ERROR] "
+                    f"{type(e).__name__}: {e}"
+                )
+
+                member = None
+
+    except Exception as e:
+
+        print(
+            "[ASSISTANT MEMBER CHECK ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+        member = None
+
+    # =====================================================
+    # MEMBER EXISTS
+    # =====================================================
+
+    if member:
+
+        # -------------------------------------------------
+        # BANNED
+        # -------------------------------------------------
+
+        if member.status == ChatMemberStatus.BANNED:
+
+            await message.reply_text(
+                _["call_2"].format(
+                    client.mention,
+                    assistant_id,
+                    assistant_name,
+                    assistant_username,
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                text=(
+                                    "๏ 𝗨ɴʙᴀɴ "
+                                    "𝗔ssɪsᴛᴀɴᴛ ๏"
+                                ),
+                                callback_data=(
+                                    "unban_assistant"
+                                ),
+                            )
+                        ]
+                    ]
+                ),
+            )
+
+            return False
+
+        # -------------------------------------------------
+        # RESTRICTED
+        # -------------------------------------------------
+
+        if member.status == ChatMemberStatus.RESTRICTED:
+
+            await message.reply_text(
+                _["call_2"].format(
+                    client.mention,
+                    assistant_id,
+                    assistant_name,
+                    assistant_username,
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                text=(
+                                    "๏ 𝗨ɴʙᴀɴ "
+                                    "𝗔ssɪsᴛᴀɴᴛ ๏"
+                                ),
+                                callback_data=(
+                                    "unban_assistant"
+                                ),
+                            )
+                        ]
+                    ]
+                ),
+            )
+
+            return False
+
+        # -------------------------------------------------
+        # ALREADY MEMBER
+        # -------------------------------------------------
+
+        if member.status in (
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        ):
+
+            try:
+
+                await userbot.resolve_peer(
+                    chat_id
+                )
+
+            except Exception as e:
+
+                print(
+                    "[ASSISTANT RESOLVE ERROR] "
+                    f"{type(e).__name__}: {e}"
+                )
+
+            return True
+
+    # =====================================================
+    # GET INVITE LINK
+    # =====================================================
+
+    invitelink, invite_bot = await get_invite_link(
+        client=client,
+        message=message,
+        chat_id=chat_id,
+    )
+
+    # =====================================================
+    # NO LINK
+    # =====================================================
+
+    if not invitelink:
+
+        await message.reply_text(
+            (
+                "❌ <b>Assistant group me join nahi ho saka.</b>\n\n"
+                "Current bot ke paas <b>Invite Users via Link</b> "
+                "permission nahi mili.\n\n"
+                "Bot ko group ka <b>Administrator</b> banao aur "
+                "<b>Invite Users via Link</b> permission ON karo.\n\n"
+                "Phir <code>/play</code> dobara try karo."
+            )
+        )
+
+        return False
+
+    # =====================================================
+    # NORMALIZE INVITE LINK
+    # =====================================================
+
+    if invitelink.startswith(
+        "https://t.me/+"
+    ):
+
+        invitelink = invitelink.replace(
+            "https://t.me/+",
+            "https://t.me/joinchat/",
+        )
+
+    # =====================================================
+    # SAVE LINK
+    # =====================================================
+
+    links[chat_id] = invitelink
+
+    # =====================================================
+    # JOIN MESSAGE
+    # =====================================================
+
+    try:
+
+        join_message = await message.reply_text(
+            _["call_4"].format(
+                client.mention
+            )
+        )
+
+    except Exception:
+
+        join_message = None
+
+    # =====================================================
+    # ASSISTANT JOIN
+    # =====================================================
+
+    try:
+
+        await asyncio.sleep(1)
+
+        await userbot.join_chat(
+            invitelink
+        )
+
+    # =====================================================
+    # JOIN REQUEST
+    # =====================================================
+
+    except InviteRequestSent:
+
+        print(
+            "[ASSISTANT] "
+            "Join request sent."
+        )
+
+        approved = await approve_assistant_request(
+            client=invite_bot or client,
+            chat_id=chat_id,
+            assistant_id=assistant_id,
+        )
+
+        if not approved:
+
+            try:
+
+                await message.reply_text(
+                    (
+                        "❌ <b>Assistant join request approve nahi hua.</b>\n\n"
+                        "Bot ko group me <b>Invite Users via Link</b> "
+                        "permission deni hogi."
+                    )
+                )
+
+            except Exception:
+                pass
+
+            return False
+
+        await asyncio.sleep(3)
+
+        if join_message:
+
+            try:
+
+                await join_message.edit(
+                    _["call_5"].format(
+                        client.mention
+                    )
+                )
+
+            except Exception:
+                pass
+
+    # =====================================================
+    # ALREADY PARTICIPANT
+    # =====================================================
+
+    except UserAlreadyParticipant:
+
+        print(
+            "[ASSISTANT] "
+            "Already participant."
+        )
+
+    # =====================================================
+    # OTHER ERROR
+    # =====================================================
+
+    except Exception as e:
+
+        print(
+            "[ASSISTANT JOIN ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+        try:
+
+            await message.reply_text(
+                (
+                    "❌ <b>Assistant join failed.</b>\n\n"
+                    f"<code>{type(e).__name__}: {e}</code>"
+                )
+            )
+
+        except Exception:
+            pass
+
+        return False
+
+    # =====================================================
+    # RESOLVE CHAT
+    # =====================================================
+
+    try:
+
+        await userbot.resolve_peer(
+            chat_id
+        )
+
+    except Exception as e:
+
+        print(
+            "[ASSISTANT RESOLVE ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+    # =====================================================
+    # VERIFY AFTER JOIN
+    # =====================================================
+
+    await asyncio.sleep(2)
+
+    verified = False
+
+    # -----------------------------------------------------
+    # CURRENT BOT VERIFY
+    # -----------------------------------------------------
+
+    try:
+
+        member = await client.get_chat_member(
+            chat_id,
+            assistant_id,
+        )
+
+        if member.status not in (
+            ChatMemberStatus.BANNED,
+            ChatMemberStatus.RESTRICTED,
+        ):
+
+            verified = True
+
+    except UserNotParticipant:
+
+        verified = False
+
+    except Exception as e:
+
+        print(
+            "[ASSISTANT VERIFY CURRENT ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+    # -----------------------------------------------------
+    # MAIN BOT VERIFY FALLBACK
+    # -----------------------------------------------------
+
+    if not verified and client is not app:
+
+        try:
+
+            member = await app.get_chat_member(
+                chat_id,
+                assistant_id,
+            )
+
+            if member.status not in (
+                ChatMemberStatus.BANNED,
+                ChatMemberStatus.RESTRICTED,
+            ):
+
+                verified = True
+
+        except Exception as e:
+
+            print(
+                "[ASSISTANT VERIFY MAIN ERROR] "
+                f"{type(e).__name__}: {e}"
+            )
+
+    # =====================================================
+    # NOT VERIFIED
+    # =====================================================
+
+    if not verified:
+
+        print(
+            "[ASSISTANT VERIFY] "
+            "Assistant is still not in group."
+        )
+
+        try:
+
+            await message.reply_text(
+                (
+                    "❌ <b>Assistant abhi group me join nahi hua.</b>\n\n"
+                    "Bot ki <b>Invite Users via Link</b> "
+                    "permission check karo."
+                )
+            )
+
+        except Exception:
+            pass
+
+        return False
+
+    # =====================================================
+    # SUCCESS
+    # =====================================================
+
+    print(
+        f"[ASSISTANT READY] "
+        f"{assistant_username} | "
+        f"chat={chat_id}"
+    )
+
+    return True
 
 
 # =========================================================
@@ -169,7 +844,9 @@ async def send_play_logger(
     video_telegram=None,
 ):
     """
-    Logger fail hone par playback ko kabhi stop nahi karega.
+    Main / clone play logger.
+
+    Logger fail hone par playback stop nahi hoga.
     """
 
     try:
@@ -191,7 +868,7 @@ async def send_play_logger(
             streamtype = "Search"
 
         # -------------------------------------------------
-        # MAIN / CLONE CHECK
+        # BOT CHECK
         # -------------------------------------------------
 
         try:
@@ -259,437 +936,6 @@ async def send_play_logger(
             "[PLAY LOGGER ERROR] "
             f"{type(e).__name__}: {e}"
         )
-
-
-# =========================================================
-# ASSISTANT JOIN
-# =========================================================
-
-async def ensure_assistant_joined(
-    message,
-    chat_id,
-    userbot,
-    assistant,
-    _,
-):
-    """
-    Assistant ko group me ensure karta hai.
-
-    Return:
-        True  = assistant ready
-        False = assistant ready nahi hua
-    """
-
-    assistant_id = assistant.id
-
-    assistant_name = (
-        assistant.first_name
-        or "Assistant"
-    )
-
-    assistant_username = (
-        f"@{assistant.username}"
-        if assistant.username
-        else "No Username"
-    )
-
-    # =====================================================
-    # CURRENT MEMBER CHECK
-    # =====================================================
-
-    try:
-
-        member = await app.get_chat_member(
-            chat_id,
-            assistant_id,
-        )
-
-        # -------------------------------------------------
-        # BANNED
-        # -------------------------------------------------
-
-        if member.status == ChatMemberStatus.BANNED:
-
-            await message.reply_text(
-                _["call_2"].format(
-                    app.mention,
-                    assistant_id,
-                    assistant_name,
-                    assistant_username,
-                ),
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [
-                            InlineKeyboardButton(
-                                text=(
-                                    "๏ 𝗨ɴʙᴀɴ "
-                                    "𝗔ssɪsᴛᴀɴᴛ ๏"
-                                ),
-                                callback_data="unban_assistant",
-                            )
-                        ]
-                    ]
-                ),
-            )
-
-            return False
-
-        # -------------------------------------------------
-        # RESTRICTED
-        # -------------------------------------------------
-
-        if member.status == ChatMemberStatus.RESTRICTED:
-
-            await message.reply_text(
-                _["call_2"].format(
-                    app.mention,
-                    assistant_id,
-                    assistant_name,
-                    assistant_username,
-                ),
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [
-                            InlineKeyboardButton(
-                                text=(
-                                    "๏ 𝗨ɴʙᴀɴ "
-                                    "𝗔ssɪsᴛᴀɴᴛ ๏"
-                                ),
-                                callback_data="unban_assistant",
-                            )
-                        ]
-                    ]
-                ),
-            )
-
-            return False
-
-        # -------------------------------------------------
-        # ALREADY IN GROUP
-        # -------------------------------------------------
-
-        if member.status in (
-            ChatMemberStatus.MEMBER,
-            ChatMemberStatus.ADMINISTRATOR,
-            ChatMemberStatus.OWNER,
-        ):
-
-            try:
-                await userbot.resolve_peer(chat_id)
-            except Exception:
-                pass
-
-            return True
-
-    except UserNotParticipant:
-
-        pass
-
-    except ChatAdminRequired:
-
-        await message.reply_text(
-            _["call_1"]
-        )
-
-        return False
-
-    except Exception as e:
-
-        print(
-            "[ASSISTANT MEMBER CHECK ERROR] "
-            f"{type(e).__name__}: {e}"
-        )
-
-    # =====================================================
-    # ASSISTANT NOT IN GROUP
-    # =====================================================
-
-    invitelink = links.get(chat_id)
-
-    # =====================================================
-    # PUBLIC GROUP
-    # =====================================================
-
-    if not invitelink:
-
-        try:
-
-            username = getattr(
-                message.chat,
-                "username",
-                None,
-            )
-
-            if username:
-
-                invitelink = username
-
-        except Exception:
-            invitelink = None
-
-    # =====================================================
-    # PRIVATE GROUP
-    # =====================================================
-
-    if not invitelink:
-
-        try:
-
-            # -------------------------------------------------
-            # IMPORTANT:
-            # Bot ko "Invite Users via Link" permission
-            # chahiye.
-            # -------------------------------------------------
-
-            invitelink = (
-                await app.export_chat_invite_link(
-                    chat_id
-                )
-            )
-
-        except ChatAdminRequired:
-
-            await message.reply_text(
-                _["call_1"]
-            )
-
-            print(
-                "[ASSISTANT JOIN] "
-                "Bot needs Invite Users via Link permission."
-            )
-
-            return False
-
-        except Exception as e:
-
-            error_name = type(e).__name__
-
-            print(
-                "[ASSISTANT INVITE ERROR] "
-                f"{error_name}: {e}"
-            )
-
-            # -------------------------------------------------
-            # Clear permission message
-            # -------------------------------------------------
-
-            try:
-
-                await message.reply_text(
-                    (
-                        "❌ <b>Assistant group me join nahi ho saka.</b>\n\n"
-                        "Bot ko group me <b>Invite Users via Link</b> "
-                        "permission do.\n\n"
-                        "Phir <code>/play</code> dobara try karo."
-                    )
-                )
-
-            except Exception:
-                pass
-
-            return False
-
-    # =====================================================
-    # NORMALIZE INVITE LINK
-    # =====================================================
-
-    if (
-        invitelink
-        and invitelink.startswith(
-            "https://t.me/+"
-        )
-    ):
-
-        invitelink = invitelink.replace(
-            "https://t.me/+",
-            "https://t.me/joinchat/",
-        )
-
-    # =====================================================
-    # SAVE LINK
-    # =====================================================
-
-    if invitelink:
-
-        links[chat_id] = invitelink
-
-    # =====================================================
-    # ASSISTANT JOIN MESSAGE
-    # =====================================================
-
-    try:
-
-        join_message = await message.reply_text(
-            _["call_4"].format(
-                app.mention
-            )
-        )
-
-    except Exception:
-
-        join_message = None
-
-    # =====================================================
-    # JOIN
-    # =====================================================
-
-    try:
-
-        await asyncio.sleep(1)
-
-        await userbot.join_chat(
-            invitelink
-        )
-
-    # =====================================================
-    # JOIN REQUEST
-    # =====================================================
-
-    except InviteRequestSent:
-
-        try:
-
-            await app.approve_chat_join_request(
-                chat_id,
-                assistant_id,
-            )
-
-        except Exception as e:
-
-            print(
-                "[ASSISTANT APPROVE ERROR] "
-                f"{type(e).__name__}: {e}"
-            )
-
-            try:
-
-                await message.reply_text(
-                    (
-                        "❌ Assistant ka join request "
-                        "approve nahi ho saka.\n\n"
-                        f"<code>{type(e).__name__}</code>"
-                    )
-                )
-
-            except Exception:
-                pass
-
-            return False
-
-        await asyncio.sleep(3)
-
-        if join_message:
-
-            try:
-
-                await join_message.edit(
-                    _["call_5"].format(
-                        app.mention
-                    )
-                )
-
-            except Exception:
-                pass
-
-    # =====================================================
-    # ALREADY PARTICIPANT
-    # =====================================================
-
-    except UserAlreadyParticipant:
-
-        pass
-
-    # =====================================================
-    # OTHER JOIN ERROR
-    # =====================================================
-
-    except Exception as e:
-
-        print(
-            "[ASSISTANT JOIN ERROR] "
-            f"{type(e).__name__}: {e}"
-        )
-
-        try:
-
-            await message.reply_text(
-                (
-                    "❌ <b>Assistant join failed.</b>\n\n"
-                    f"<code>{type(e).__name__}: {e}</code>"
-                )
-            )
-
-        except Exception:
-            pass
-
-        return False
-
-    # =====================================================
-    # RESOLVE CHAT
-    # =====================================================
-
-    try:
-
-        await userbot.resolve_peer(
-            chat_id
-        )
-
-    except Exception as e:
-
-        print(
-            "[ASSISTANT RESOLVE ERROR] "
-            f"{type(e).__name__}: {e}"
-        )
-
-    # =====================================================
-    # VERIFY AGAIN
-    # =====================================================
-
-    await asyncio.sleep(2)
-
-    try:
-
-        member = await app.get_chat_member(
-            chat_id,
-            assistant_id,
-        )
-
-        if member.status in (
-            ChatMemberStatus.BANNED,
-            ChatMemberStatus.RESTRICTED,
-        ):
-
-            return False
-
-    except UserNotParticipant:
-
-        print(
-            "[ASSISTANT VERIFY] "
-            "Assistant is still not in group."
-        )
-
-        try:
-
-            await message.reply_text(
-                (
-                    "❌ Assistant abhi group me join nahi hua.\n"
-                    "Please bot ki invite permission check karo."
-                )
-            )
-
-        except Exception:
-            pass
-
-        return False
-
-    except Exception as e:
-
-        print(
-            "[ASSISTANT VERIFY ERROR] "
-            f"{type(e).__name__}: {e}"
-        )
-
-    return True
 
 
 # =========================================================
@@ -777,7 +1023,7 @@ def PlayWrapper(command):
 
                 return await message.reply_text(
                     text=(
-                        f"{app.mention} ɪs ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ, "
+                        f"{client.mention} ɪs ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ, "
                         f"ᴠɪsɪᴛ <a href='{SUPPORT_CHAT}'>"
                         f"sᴜᴘᴘᴏʀᴛ ᴄʜᴀᴛ</a> ғᴏʀ ᴋɴᴏᴡɪɴɢ "
                         f"ᴛʜᴇ ʀᴇᴀsᴏɴ."
@@ -928,15 +1174,23 @@ def PlayWrapper(command):
 
             try:
 
-                chat = await app.get_chat(
+                chat = await client.get_chat(
                     chat_id
                 )
 
             except Exception:
 
-                return await message.reply_text(
-                    _["cplay_4"]
-                )
+                try:
+
+                    chat = await app.get_chat(
+                        chat_id
+                    )
+
+                except Exception:
+
+                    return await message.reply_text(
+                        _["cplay_4"]
+                    )
 
             channel = chat.title
 
@@ -1111,7 +1365,7 @@ def PlayWrapper(command):
                 )
 
             # -------------------------------------------------
-            # IMPORTANT FIX
+            # GET ASSISTANT USER
             # -------------------------------------------------
 
             assistant = await get_assistant_info(
@@ -1125,10 +1379,11 @@ def PlayWrapper(command):
                 )
 
             # -------------------------------------------------
-            # ASSISTANT JOIN
+            # ENSURE ASSISTANT JOINED
             # -------------------------------------------------
 
             ready = await ensure_assistant_joined(
+                client=client,
                 message=message,
                 chat_id=chat_id,
                 userbot=userbot,
@@ -1161,6 +1416,7 @@ def PlayWrapper(command):
             await message.delete()
 
         except Exception:
+
             pass
 
         # =================================================
@@ -1198,6 +1454,10 @@ def PlayWrapper(command):
 # =========================================================
 
 def CPlayWrapper(command):
+    """
+    Backward compatible CPlayWrapper.
+    """
+
     return PlayWrapper(command)
 
 
@@ -1208,4 +1468,4 @@ def CPlayWrapper(command):
 __all__ = [
     "PlayWrapper",
     "CPlayWrapper",
-            ]
+]
