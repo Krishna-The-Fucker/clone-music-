@@ -28,6 +28,8 @@ from PritiMusic.utils.database import (
 
 from PritiMusic.utils.inline import botplaylist_markup
 
+from PritiMusic.utils.logger import play_logs
+
 from config import (
     PLAYLIST_IMG_URL,
     SUPPORT_CHAT,
@@ -41,9 +43,14 @@ links = {}
 clinks = {}
 
 
+# =========================================================
+# IMAGE HELPER
+# =========================================================
+
 def get_image(value):
     """
-    Pyrogram ko single image string return karta hai.
+    Pyrogram ko single image URL return karta hai.
+    Agar config mein list ho to first URL lega.
     """
 
     if isinstance(value, list):
@@ -52,11 +59,65 @@ def get_image(value):
     return value
 
 
+# =========================================================
+# PLAY LOGGER HELPER
+# =========================================================
+
+async def send_play_logger(
+    message,
+    url=None,
+    audio_telegram=None,
+    video_telegram=None,
+):
+    """
+    Play request ko logger group mein bhejta hai.
+
+    Logger fail hone par playback nahi rukega.
+    """
+
+    try:
+
+        if url:
+            streamtype = "youtube"
+
+        elif audio_telegram:
+            streamtype = "telegram_audio"
+
+        elif video_telegram:
+            streamtype = "telegram_video"
+
+        else:
+            streamtype = "search"
+
+        await play_logs(
+            message,
+            streamtype,
+        )
+
+    except Exception as e:
+
+        print(
+            f"[PLAY LOGGER ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+
+# =========================================================
+# PLAY WRAPPER
+# =========================================================
+
 def PlayWrapper(command):
 
     async def wrapper(client, message):
 
-        language = await get_lang(message.chat.id)
+        # =================================================
+        # LANGUAGE
+        # =================================================
+
+        language = await get_lang(
+            message.chat.id
+        )
+
         _ = get_string(language)
 
         # =================================================
@@ -134,7 +195,9 @@ def PlayWrapper(command):
         # YOUTUBE URL
         # =================================================
 
-        url = await YouTube.url(message)
+        url = await YouTube.url(
+            message
+        )
 
         # =================================================
         # NO INPUT
@@ -149,6 +212,7 @@ def PlayWrapper(command):
             if len(message.command) < 2:
 
                 if "stream" in message.command:
+
                     return await message.reply_text(
                         _["str_1"]
                     )
@@ -160,6 +224,7 @@ def PlayWrapper(command):
                 )
 
                 if not playlist_image:
+
                     return await message.reply_text(
                         _["play_18"],
                         reply_markup=InlineKeyboardMarkup(
@@ -176,6 +241,23 @@ def PlayWrapper(command):
                 )
 
         # =================================================
+        # PLAY LOGGER
+        #
+        # IMPORTANT:
+        # Logger ko actual play function se pehle call
+        # kiya ja raha hai.
+        #
+        # Logger fail hone par playback continue karega.
+        # =================================================
+
+        await send_play_logger(
+            message=message,
+            url=url,
+            audio_telegram=audio_telegram,
+            video_telegram=video_telegram,
+        )
+
+        # =================================================
         # CHAT MODE
         # =================================================
 
@@ -186,13 +268,19 @@ def PlayWrapper(command):
             )
 
             if chat_id is None:
+
                 return await message.reply_text(
                     _["setting_7"]
                 )
 
             try:
-                chat = await app.get_chat(chat_id)
+
+                chat = await app.get_chat(
+                    chat_id
+                )
+
             except Exception:
+
                 return await message.reply_text(
                     _["cplay_4"]
                 )
@@ -232,11 +320,13 @@ def PlayWrapper(command):
                 )
 
                 if not admins:
+
                     return await message.reply_text(
                         _["admin_13"]
                     )
 
                 if message.from_user.id not in admins:
+
                     return await message.reply_text(
                         _["play_4"]
                     )
@@ -284,7 +374,10 @@ def PlayWrapper(command):
 
         if last_command.endswith("e"):
 
-            if not await is_active_chat(chat_id):
+            if not await is_active_chat(
+                chat_id
+            ):
+
                 return await message.reply_text(
                     _["play_16"]
                 )
@@ -299,14 +392,23 @@ def PlayWrapper(command):
         # ASSISTANT JOIN
         # =================================================
 
-        if not await is_active_chat(chat_id):
+        if not await is_active_chat(
+            chat_id
+        ):
 
-            userbot = await get_assistant(chat_id)
+            userbot = await get_assistant(
+                chat_id
+            )
 
             if not userbot:
+
                 return await message.reply_text(
                     _["call_1"]
                 )
+
+            # =================================================
+            # CHECK ASSISTANT MEMBER
+            # =================================================
 
             try:
 
@@ -322,6 +424,10 @@ def PlayWrapper(command):
                     return await message.reply_text(
                         _["call_1"]
                     )
+
+                # =================================================
+                # BANNED / RESTRICTED
+                # =================================================
 
                 if get.status in (
                     ChatMemberStatus.BANNED,
@@ -339,23 +445,34 @@ def PlayWrapper(command):
                             [
                                 [
                                     InlineKeyboardButton(
-                                        text="๏ 𝗨ɴʙᴀɴ 𝗔ssɪsᴛᴀɴᴛ ๏",
-                                        callback_data="unban_assistant",
+                                        text=(
+                                            "๏ 𝗨ɴʙᴀɴ "
+                                            "𝗔ssɪsᴛᴀɴᴛ ๏"
+                                        ),
+                                        callback_data=(
+                                            "unban_assistant"
+                                        ),
                                     )
                                 ]
                             ]
                         ),
                     )
 
+            # =================================================
+            # ASSISTANT NOT IN GROUP
+            # =================================================
+
             except UserNotParticipant:
 
-                # =========================================
+                # =============================================
                 # GET INVITE LINK
-                # =========================================
+                # =============================================
 
                 if chat_id in links:
 
-                    invitelink = links[chat_id]
+                    invitelink = links[
+                        chat_id
+                    ]
 
                 else:
 
@@ -366,10 +483,13 @@ def PlayWrapper(command):
                         )
 
                         try:
+
                             await userbot.resolve_peer(
                                 invitelink
                             )
+
                         except Exception:
+
                             pass
 
                     else:
@@ -397,18 +517,24 @@ def PlayWrapper(command):
                                 )
                             )
 
-                # =========================================
+                # =============================================
                 # NORMALIZE INVITE LINK
-                # =========================================
+                # =============================================
 
                 if invitelink.startswith(
                     "https://t.me/+"
                 ):
 
-                    invitelink = invitelink.replace(
-                        "https://t.me/+",
-                        "https://t.me/joinchat/",
+                    invitelink = (
+                        invitelink.replace(
+                            "https://t.me/+",
+                            "https://t.me/joinchat/",
+                        )
                     )
+
+                # =============================================
+                # JOIN MESSAGE
+                # =============================================
 
                 myu = await message.reply_text(
                     _["call_4"].format(
@@ -423,6 +549,10 @@ def PlayWrapper(command):
                     await userbot.join_chat(
                         invitelink
                     )
+
+                # =============================================
+                # JOIN REQUEST
+                # =============================================
 
                 except InviteRequestSent:
 
@@ -445,17 +575,28 @@ def PlayWrapper(command):
                     await asyncio.sleep(3)
 
                     try:
+
                         await myu.edit(
                             _["call_5"].format(
                                 app.mention
                             )
                         )
+
                     except Exception:
+
                         pass
+
+                # =============================================
+                # ALREADY PARTICIPANT
+                # =============================================
 
                 except UserAlreadyParticipant:
 
                     pass
+
+                # =============================================
+                # OTHER ERROR
+                # =============================================
 
                 except Exception as e:
 
@@ -466,13 +607,26 @@ def PlayWrapper(command):
                         )
                     )
 
-                links[chat_id] = invitelink
+                # =============================================
+                # SAVE LINK
+                # =============================================
+
+                links[
+                    chat_id
+                ] = invitelink
+
+                # =============================================
+                # RESOLVE CHAT
+                # =============================================
 
                 try:
+
                     await userbot.resolve_peer(
                         chat_id
                     )
+
                 except Exception:
+
                     pass
 
         # =================================================
