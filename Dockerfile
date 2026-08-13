@@ -1,4 +1,4 @@
-FROM nikolaik/python-nodejs:python3.10-nodejs20
+FROM nikolaik/python-nodejs:python3.12-nodejs20
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and install static FFmpeg (John Van Sickle build)
+# Install static FFmpeg
 RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
     -o ffmpeg.tar.xz && \
     tar -xJf ffmpeg.tar.xz && \
@@ -17,7 +17,10 @@ RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-stati
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+
+RUN python -m pip install --upgrade pip setuptools wheel
+
+RUN python -m pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/
 
