@@ -8,6 +8,13 @@ from config import LOGGER_ID, CLONE_LOGGER_ID
 # SAFE HELPERS
 # =========================================================
 
+def safe_int(value):
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
 def get_user_text(user):
     if not user:
         return "Unknown"
@@ -15,41 +22,63 @@ def get_user_text(user):
     try:
         name = user.mention
     except Exception:
-        name = user.first_name or "Unknown"
+        name = getattr(user, "first_name", None) or "Unknown"
 
-    username = f"@{user.username}" if user.username else "No Username"
+    username = (
+        f"@{user.username}"
+        if getattr(user, "username", None)
+        else "No Username"
+    )
 
-    return f"{name} ({username}) [`{user.id}`]"
+    user_id = getattr(user, "id", "Unknown")
+
+    return (
+        f"{name}\n"
+        f"<b>Username:</b> {username}\n"
+        f"<b>ID:</b> <code>{user_id}</code>"
+    )
 
 
 def get_chat_text(chat):
     if not chat:
         return "Unknown"
 
-    title = chat.title or chat.first_name or "Unknown"
+    title = (
+        getattr(chat, "title", None)
+        or getattr(chat, "first_name", None)
+        or "Unknown"
+    )
 
-    if chat.username:
-        link = f"https://t.me/{chat.username}"
+    chat_id = getattr(chat, "id", "Unknown")
+
+    username = getattr(chat, "username", None)
+
+    if username:
+        link = f"https://t.me/{username}"
     else:
         link = "Private Group"
 
     return (
-        f"<b>{title}</b> "
-        f"<code>{chat.id}</code>\n"
+        f"<b>{title}</b>\n"
+        f"<b>ID:</b> <code>{chat_id}</code>\n"
         f"<b>Link:</b> {link}"
     )
 
 
 async def get_query(message):
     try:
-        if message.text:
-            parts = message.text.split(None, 1)
+        text = getattr(message, "text", None)
+
+        if text:
+            parts = text.split(None, 1)
 
             if len(parts) > 1:
                 return parts[1][:1000]
 
-        if message.caption:
-            parts = message.caption.split(None, 1)
+        caption = getattr(message, "caption", None)
+
+        if caption:
+            parts = caption.split(None, 1)
 
             if len(parts) > 1:
                 return parts[1][:1000]
@@ -60,6 +89,48 @@ async def get_query(message):
     return "Link / File / Reply"
 
 
+def get_source(message, streamtype=None):
+    if streamtype:
+        return str(streamtype)
+
+    try:
+        if message.reply_to_message:
+
+            if message.reply_to_message.audio:
+                return "Telegram Audio"
+
+            if message.reply_to_message.voice:
+                return "Telegram Voice"
+
+            if message.reply_to_message.video:
+                return "Telegram Video"
+
+            if message.reply_to_message.document:
+                return "Telegram Document"
+
+        text = (
+            getattr(message, "text", None)
+            or getattr(message, "caption", None)
+            or ""
+        )
+
+        text_lower = text.lower()
+
+        if "youtube.com" in text_lower:
+            return "YouTube"
+
+        if "youtu.be" in text_lower:
+            return "YouTube"
+
+        if "spotify.com" in text_lower:
+            return "Spotify"
+
+    except Exception:
+        pass
+
+    return "Unknown"
+
+
 # =========================================================
 # MAIN BOT PLAY LOGGER
 # =========================================================
@@ -67,74 +138,85 @@ async def get_query(message):
 async def play_logs(message, streamtype="Unknown"):
     """
     Main bot ke play logs LOGGER_ID me bhejta hai.
-
-    IMPORTANT:
-    Is function me is_on_off(2) ka dependency hata diya gaya hai,
-    taaki logger database setting ki wajah se silently OFF na ho.
     """
 
     try:
-        if not LOGGER_ID:
-            print("[LOGGER] LOGGER_ID is not configured.")
-            return
 
-        # Logger group me same message dobara log na ho
-        if message.chat and message.chat.id == LOGGER_ID:
-            return
+        logger_id = safe_int(LOGGER_ID)
+
+        if not logger_id:
+            print("[LOGGER] LOGGER_ID is not configured.")
+            return False
+
+        if not message:
+            return False
+
+        if message.chat and message.chat.id == logger_id:
+            return False
+
+        bot = await app.get_me()
 
         query = await get_query(message)
 
         user_text = get_user_text(
-            message.from_user
+            getattr(message, "from_user", None)
         )
 
         chat_text = get_chat_text(
-            message.chat
+            getattr(message, "chat", None)
         )
 
-        bot = await app.get_me()
+        source = get_source(
+            message,
+            streamtype
+        )
 
         logger_text = f"""
 <b>🎵 {bot.mention} ᴘʟᴀʏ ʟᴏɢ</b>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
-<b>👤 ᴜsᴇʀ:</b>
+<b>👤 ᴘʟᴀʏᴇᴅ ʙʏ:</b>
 {user_text}
 
 <b>🎶 ǫᴜᴇʀʏ:</b>
 <code>{query}</code>
 
 <b>📡 sᴏᴜʀᴄᴇ:</b>
-<code>{streamtype}</code>
+<code>{source}</code>
 
 <b>👥 ᴄʜᴀᴛ:</b>
 {chat_text}
 
 <b>🤖 ʙᴏᴛ:</b>
 {bot.mention}
-<code>{bot.id}</code>
+<b>ID:</b> <code>{bot.id}</code>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 """
 
         await app.send_message(
-            chat_id=LOGGER_ID,
+            chat_id=logger_id,
             text=logger_text,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
 
         print(
-            f"[LOGGER] Play log sent successfully: "
-            f"{message.chat.id if message.chat else 'Unknown'}"
+            f"[LOGGER] Main play log sent | "
+            f"chat={message.chat.id}"
         )
 
+        return True
+
     except Exception as e:
+
         print(
             f"[LOGGER ERROR] play_logs: "
             f"{type(e).__name__}: {e}"
         )
+
+        return False
 
 
 # =========================================================
@@ -151,11 +233,12 @@ async def clone_bot_logs(
     """
     Clone bot ka play log:
 
-    1. Clone logger me
-    2. Main LOGGER_ID me
+    1. Clone logger
+    2. Main logger
     """
 
     try:
+
         bot = await client.get_me()
 
         if not bot_mention:
@@ -164,20 +247,29 @@ async def clone_bot_logs(
         query = await get_query(message)
 
         user_text = get_user_text(
-            message.from_user
+            getattr(message, "from_user", None)
         )
 
         chat_text = get_chat_text(
-            message.chat
+            getattr(message, "chat", None)
         )
 
-        # -------------------------------------------------
-        # Clone Logger
-        # -------------------------------------------------
+        source = get_source(
+            message,
+            streamtype
+        )
+
+        # =================================================
+        # CLONE LOGGER
+        # =================================================
 
         target_clone_logger = (
             clone_logger_id
             or CLONE_LOGGER_ID
+        )
+
+        target_clone_logger = safe_int(
+            target_clone_logger
         )
 
         if target_clone_logger:
@@ -185,126 +277,142 @@ async def clone_bot_logs(
             clone_text = f"""
 <b>🎵 ᴄʟᴏɴᴇ ʙᴏᴛ ᴘʟᴀʏ ʟᴏɢ</b>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
 <b>🤖 ʙᴏᴛ:</b>
 {bot_mention}
+
+<b>🆔 ɪᴅ:</b>
 <code>{bot.id}</code>
 
-<b>👤 ᴜsᴇʀ:</b>
+<b>👤 ᴘʟᴀʏᴇᴅ ʙʏ:</b>
 {user_text}
 
 <b>🎶 ǫᴜᴇʀʏ:</b>
 <code>{query}</code>
 
 <b>📡 sᴏᴜʀᴄᴇ:</b>
-<code>{streamtype}</code>
+<code>{source}</code>
 
 <b>👥 ᴄʜᴀᴛ:</b>
 {chat_text}
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 """
 
             try:
+
                 await client.send_message(
-                    chat_id=int(target_clone_logger),
+                    chat_id=target_clone_logger,
                     text=clone_text,
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
 
                 print(
-                    "[LOGGER] Clone logger message sent."
+                    "[LOGGER] Clone play log sent."
                 )
 
             except Exception as e:
+
                 print(
                     "[LOGGER ERROR] Clone logger: "
                     f"{type(e).__name__}: {e}"
                 )
 
-        # -------------------------------------------------
-        # Main Logger
-        # -------------------------------------------------
+        # =================================================
+        # MAIN LOGGER
+        # =================================================
 
-        if LOGGER_ID:
+        main_logger = safe_int(LOGGER_ID)
+
+        if main_logger:
 
             main_text = f"""
 <b>🤖 ᴄʟᴏɴᴇ ʙᴏᴛ ᴘʟᴀʏ</b>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
 <b>🤖 ᴄʟᴏɴᴇ:</b>
 {bot_mention}
+
+<b>🆔 ɪᴅ:</b>
 <code>{bot.id}</code>
 
-<b>👤 ᴜsᴇʀ:</b>
+<b>👤 ᴘʟᴀʏᴇᴅ ʙʏ:</b>
 {user_text}
 
 <b>🎶 ǫᴜᴇʀʏ:</b>
 <code>{query}</code>
 
 <b>📡 sᴏᴜʀᴄᴇ:</b>
-<code>{streamtype}</code>
+<code>{source}</code>
 
 <b>👥 ᴄʜᴀᴛ:</b>
 {chat_text}
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 """
 
             try:
+
                 await app.send_message(
-                    chat_id=LOGGER_ID,
+                    chat_id=main_logger,
                     text=main_text,
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
 
                 print(
-                    "[LOGGER] Main clone log sent."
+                    "[LOGGER] Main clone play log sent."
                 )
 
             except Exception as e:
+
                 print(
                     "[LOGGER ERROR] Main logger: "
                     f"{type(e).__name__}: {e}"
                 )
 
+        return True
+
     except Exception as e:
+
         print(
-            f"[LOGGER ERROR] clone_bot_logs: "
+            "[LOGGER ERROR] clone_bot_logs: "
             f"{type(e).__name__}: {e}"
         )
 
+        return False
+
 
 # =========================================================
-# BOT START LOGGER
+# MAIN BOT START LOGGER
 # =========================================================
 
 async def bot_start_logs(client=None):
     """
-    Bot start hone par LOGGER_ID me message.
+    Main bot start hone par LOGGER_ID me message.
     """
 
     try:
+
         bot_client = client or app
 
+        logger_id = safe_int(LOGGER_ID)
+
+        if not logger_id:
+            print(
+                "[LOGGER] LOGGER_ID is not configured."
+            )
+            return False
+
         bot = await bot_client.get_me()
-
-        owner_text = "Unknown"
-
-        try:
-            if bot.id:
-                owner_text = f"Bot ID: <code>{bot.id}</code>"
-        except Exception:
-            pass
 
         text = f"""
 <b>🚀 ʙᴏᴛ sᴛᴀʀᴛᴇᴅ</b>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
 <b>🤖 ʙᴏᴛ:</b>
 {bot.mention}
@@ -313,51 +421,60 @@ async def bot_start_logs(client=None):
 <code>{bot.id}</code>
 
 <b>👤 ᴜsᴇʀɴᴀᴍᴇ:</b>
-@{bot.username or 'None'}
+@{bot.username or "None"}
 
 <b>📌 sᴛᴀᴛᴜs:</b>
 <code>ONLINE</code>
 
-{owner_text}
-
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 """
 
-        await app.send_message(
-            chat_id=LOGGER_ID,
+        await bot_client.send_message(
+            chat_id=logger_id,
             text=text,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
 
         print(
-            f"[LOGGER] Bot started log sent: @{bot.username}"
+            f"[LOGGER] Bot start log sent: "
+            f"@{bot.username}"
         )
 
+        return True
+
     except Exception as e:
+
         print(
-            f"[LOGGER ERROR] bot_start_logs: "
+            "[LOGGER ERROR] bot_start_logs: "
             f"{type(e).__name__}: {e}"
         )
 
+        return False
+
 
 # =========================================================
-# CLONE START LOGGER
+# CLONE BOT START LOGGER
 # =========================================================
 
 async def clone_start_logs(client):
     """
-    Clone bot start hone par CLONE_LOGGER_ID
-    aur main LOGGER_ID dono me message.
+    Clone bot start hone par:
+
+    - CLONE_LOGGER_ID
+    - LOGGER_ID
+
+    dono jagah message bhejta hai.
     """
 
     try:
+
         bot = await client.get_me()
 
         text = f"""
 <b>🟢 ᴄʟᴏɴᴇ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ</b>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
 <b>🤖 ʙᴏᴛ:</b>
 {bot.mention}
@@ -366,46 +483,81 @@ async def clone_start_logs(client):
 <code>{bot.id}</code>
 
 <b>👤 ᴜsᴇʀɴᴀᴍᴇ:</b>
-@{bot.username or 'None'}
+@{bot.username or "None"}
 
 <b>📌 sᴛᴀᴛᴜs:</b>
 <code>ONLINE</code>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 """
 
-        # Clone logger
-        if CLONE_LOGGER_ID:
+        clone_logger = safe_int(
+            CLONE_LOGGER_ID
+        )
+
+        main_logger = safe_int(
+            LOGGER_ID
+        )
+
+        # =================================================
+        # CLONE LOGGER
+        # =================================================
+
+        if clone_logger:
 
             try:
+
                 await client.send_message(
-                    chat_id=CLONE_LOGGER_ID,
+                    chat_id=clone_logger,
                     text=text,
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
-            except Exception as e:
+
                 print(
-                    f"[LOGGER ERROR] clone start logger: {e}"
+                    "[LOGGER] Clone start log sent."
                 )
 
-        # Main logger
-        if LOGGER_ID:
+            except Exception as e:
+
+                print(
+                    "[LOGGER ERROR] "
+                    f"Clone start: {type(e).__name__}: {e}"
+                )
+
+        # =================================================
+        # MAIN LOGGER
+        # =================================================
+
+        if main_logger:
 
             try:
+
                 await app.send_message(
-                    chat_id=LOGGER_ID,
+                    chat_id=main_logger,
                     text=text,
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
-            except Exception as e:
+
                 print(
-                    f"[LOGGER ERROR] main start logger: {e}"
+                    "[LOGGER] Main clone-start log sent."
                 )
+
+            except Exception as e:
+
+                print(
+                    "[LOGGER ERROR] "
+                    f"Main clone start: {type(e).__name__}: {e}"
+                )
+
+        return True
 
     except Exception as e:
+
         print(
-            f"[LOGGER ERROR] clone_start_logs: "
+            "[LOGGER ERROR] clone_start_logs: "
             f"{type(e).__name__}: {e}"
-    )
+        )
+
+        return False
