@@ -55,8 +55,8 @@ clinks = {}
 
 def get_image(value):
     """
-    Config me image URL string ya list ho sakti hai.
-    Pyrogram ko single URL return karta hai.
+    Config me image URL string ya list/tuple ho sakti hai.
+    Pyrogram ko single image URL return karta hai.
     """
 
     if isinstance(value, (list, tuple)):
@@ -84,6 +84,43 @@ def get_command_name(message):
 
 
 # =========================================================
+# ASSISTANT INFO HELPER
+# =========================================================
+
+async def get_assistant_info(userbot):
+    """
+    get_assistant() se Pyrogram Client milta hai.
+
+    Client object me:
+        userbot.id
+        userbot.name
+        userbot.username
+
+    available nahi hote.
+
+    Isliye get_me() se actual Telegram User object
+    nikala jaata hai.
+    """
+
+    try:
+        if not userbot:
+            return None
+
+        assistant = await userbot.get_me()
+
+        return assistant
+
+    except Exception as e:
+
+        print(
+            "[ASSISTANT INFO ERROR] "
+            f"{type(e).__name__}: {e}"
+        )
+
+        return None
+
+
+# =========================================================
 # PLAY LOGGER
 # =========================================================
 
@@ -95,15 +132,9 @@ async def send_play_logger(
     video_telegram=None,
 ):
     """
-    Play request ka logger.
+    Main bot / Clone bot play logger.
 
-    Main bot:
-        play_logs()
-
-    Clone bot:
-        clone_bot_logs()
-
-    Logger me error aane par playback nahi rukega.
+    Logger fail hone par playback kabhi stop nahi hoga.
     """
 
     try:
@@ -125,10 +156,11 @@ async def send_play_logger(
             streamtype = "Search"
 
         # -------------------------------------------------
-        # CHECK CLONE / MAIN
+        # BOT CHECK
         # -------------------------------------------------
 
         try:
+
             main_me = await app.get_me()
             client_me = await client.get_me()
 
@@ -136,11 +168,17 @@ async def send_play_logger(
                 client_me.id != main_me.id
             )
 
-        except Exception:
+        except Exception as e:
+
+            print(
+                "[PLAY LOGGER BOT CHECK ERROR] "
+                f"{type(e).__name__}: {e}"
+            )
+
             is_clone = False
 
         # -------------------------------------------------
-        # CLONE LOGGER
+        # CLONE
         # -------------------------------------------------
 
         if is_clone:
@@ -157,12 +195,11 @@ async def send_play_logger(
 
                 print(
                     "[PLAY LOGGER ERROR] "
-                    f"Clone logger: "
-                    f"{type(e).__name__}: {e}"
+                    f"Clone: {type(e).__name__}: {e}"
                 )
 
         # -------------------------------------------------
-        # MAIN LOGGER
+        # MAIN BOT
         # -------------------------------------------------
 
         else:
@@ -178,8 +215,7 @@ async def send_play_logger(
 
                 print(
                     "[PLAY LOGGER ERROR] "
-                    f"Main logger: "
-                    f"{type(e).__name__}: {e}"
+                    f"Main: {type(e).__name__}: {e}"
                 )
 
     except Exception as e:
@@ -217,16 +253,18 @@ def PlayWrapper(command):
                 f"{type(e).__name__}: {e}"
             )
 
-            # Fallback language
             try:
+
                 _ = get_string("en")
+
             except Exception:
+
                 return await message.reply_text(
                     "Language configuration error."
                 )
 
         # =================================================
-        # SENDER CHAT CHECK
+        # SENDER CHAT
         # =================================================
 
         try:
@@ -250,6 +288,7 @@ def PlayWrapper(command):
                 )
 
         except Exception:
+
             pass
 
         # =================================================
@@ -351,8 +390,7 @@ def PlayWrapper(command):
             try:
 
                 command_length = len(
-                    message.command
-                    or []
+                    message.command or []
                 )
 
             except Exception:
@@ -539,6 +577,7 @@ def PlayWrapper(command):
                     video = True
 
             except Exception:
+
                 pass
 
         # =================================================
@@ -570,7 +609,7 @@ def PlayWrapper(command):
             fplay = None
 
         # =================================================
-        # ASSISTANT CHECK
+        # ASSISTANT ACTIVE CHECK
         # =================================================
 
         try:
@@ -583,17 +622,70 @@ def PlayWrapper(command):
 
             active_chat = False
 
+        # =================================================
+        # ASSISTANT
+        # =================================================
+
         if not active_chat:
 
-            userbot = await get_assistant(
-                chat_id
-            )
+            try:
+
+                userbot = await get_assistant(
+                    chat_id
+                )
+
+            except Exception as e:
+
+                print(
+                    "[GET ASSISTANT ERROR] "
+                    f"{type(e).__name__}: {e}"
+                )
+
+                userbot = None
 
             if not userbot:
 
                 return await message.reply_text(
                     _["call_1"]
                 )
+
+            # =================================================
+            # GET REAL ASSISTANT USER
+            # =================================================
+            #
+            # IMPORTANT:
+            # userbot = Client
+            # assistant = Telegram User
+            #
+            # Never use:
+            # userbot.id
+            # userbot.name
+            # userbot.username
+            #
+            # =================================================
+
+            assistant = await get_assistant_info(
+                userbot
+            )
+
+            if not assistant:
+
+                return await message.reply_text(
+                    _["call_1"]
+                )
+
+            assistant_id = assistant.id
+
+            assistant_name = (
+                assistant.first_name
+                or "Assistant"
+            )
+
+            assistant_username = (
+                f"@{assistant.username}"
+                if assistant.username
+                else "No Username"
+            )
 
             # =================================================
             # ASSISTANT MEMBER CHECK
@@ -606,7 +698,7 @@ def PlayWrapper(command):
                     member = (
                         await app.get_chat_member(
                             chat_id,
-                            userbot.id,
+                            assistant_id,
                         )
                     )
 
@@ -628,9 +720,9 @@ def PlayWrapper(command):
                     return await message.reply_text(
                         _["call_2"].format(
                             app.mention,
-                            userbot.id,
-                            userbot.name,
-                            userbot.username,
+                            assistant_id,
+                            assistant_name,
+                            assistant_username,
                         ),
                         reply_markup=InlineKeyboardMarkup(
                             [
@@ -656,12 +748,16 @@ def PlayWrapper(command):
             except UserNotParticipant:
 
                 # =============================================
-                # GET INVITE LINK
+                # GET CACHED INVITE
                 # =============================================
 
                 invitelink = links.get(
                     chat_id
                 )
+
+                # =============================================
+                # CREATE INVITE
+                # =============================================
 
                 if not invitelink:
 
@@ -719,7 +815,7 @@ def PlayWrapper(command):
                             )
 
                 # =============================================
-                # NORMALIZE INVITE LINK
+                # NORMALIZE LINK
                 # =============================================
 
                 if (
@@ -737,6 +833,16 @@ def PlayWrapper(command):
                     )
 
                 # =============================================
+                # NO INVITE LINK
+                # =============================================
+
+                if not invitelink:
+
+                    return await message.reply_text(
+                        _["call_1"]
+                    )
+
+                # =============================================
                 # JOIN MESSAGE
                 # =============================================
 
@@ -745,6 +851,10 @@ def PlayWrapper(command):
                         app.mention
                     )
                 )
+
+                # =============================================
+                # JOIN ASSISTANT
+                # =============================================
 
                 try:
 
@@ -764,7 +874,7 @@ def PlayWrapper(command):
 
                         await app.approve_chat_join_request(
                             chat_id,
-                            userbot.id,
+                            assistant_id,
                         )
 
                     except Exception as e:
@@ -804,6 +914,11 @@ def PlayWrapper(command):
 
                 except Exception as e:
 
+                    print(
+                        "[ASSISTANT JOIN ERROR] "
+                        f"{type(e).__name__}: {e}"
+                    )
+
                     return await message.reply_text(
                         _["call_3"].format(
                             app.mention,
@@ -812,7 +927,7 @@ def PlayWrapper(command):
                     )
 
                 # =============================================
-                # SAVE INVITE LINK
+                # SAVE LINK
                 # =============================================
 
                 if invitelink:
@@ -822,7 +937,7 @@ def PlayWrapper(command):
                     ] = invitelink
 
                 # =============================================
-                # RESOLVE CHAT
+                # RESOLVE GROUP
                 # =============================================
 
                 try:
@@ -835,12 +950,48 @@ def PlayWrapper(command):
 
                     pass
 
+                # =============================================
+                # VERIFY ASSISTANT AFTER JOIN
+                # =============================================
+
+                try:
+
+                    await asyncio.sleep(1)
+
+                    member = (
+                        await app.get_chat_member(
+                            chat_id,
+                            assistant_id,
+                        )
+                    )
+
+                    if member.status in (
+                        ChatMemberStatus.BANNED,
+                        ChatMemberStatus.RESTRICTED,
+                    ):
+
+                        return await message.reply_text(
+                            _["call_2"].format(
+                                app.mention,
+                                assistant_id,
+                                assistant_name,
+                                assistant_username,
+                            )
+                        )
+
+                except Exception as e:
+
+                    print(
+                        "[ASSISTANT VERIFY ERROR] "
+                        f"{type(e).__name__}: {e}"
+                    )
+
         # =================================================
         # PLAY LOGGER
+        # =================================================
         #
-        # IMPORTANT:
-        # Permission / assistant checks ke BAAD logger.
-        # Isse invalid / rejected play request log nahi hogi.
+        # Permission + assistant checks ke baad.
+        # Logger fail hone par play nahi rukega.
         # =================================================
 
         await send_play_logger(
@@ -853,9 +1004,6 @@ def PlayWrapper(command):
 
         # =================================================
         # DELETE COMMAND
-        #
-        # Logger ke baad delete kar rahe hain taaki logger
-        # ko original message ka query mil sake.
         # =================================================
 
         try:
@@ -867,7 +1015,7 @@ def PlayWrapper(command):
             pass
 
         # =================================================
-        # ACTUAL PLAY FUNCTION
+        # ACTUAL PLAY
         # =================================================
 
         try:
@@ -899,25 +1047,20 @@ def PlayWrapper(command):
 # =========================================================
 # CPLAY WRAPPER
 # =========================================================
-#
-# Project ke purane files:
-#
-# from PritiMusic.utils.decorators.play import CPlayWrapper
-#
-# use kar sakte hain.
-#
-# Isko alias rakhna intentionally hai.
-# =========================================================
 
 def CPlayWrapper(command):
+    """
+    Backward compatible CPlayWrapper.
+    """
+
     return PlayWrapper(command)
 
 
 # =========================================================
-# BACKWARD COMPATIBILITY
+# EXPORTS
 # =========================================================
 
 __all__ = [
     "PlayWrapper",
     "CPlayWrapper",
-    ]
+                ]
